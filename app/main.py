@@ -1,39 +1,33 @@
-# from fastapi import FastAPI
-# from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.views.medical_record_api import router as medical_records_router
+from app.database import init_db
 
-# from app.views.medical_record_api import router as medical_records_router
+# Initialize the database
+init_db()
 
-# def create_app() -> "FastAPI":
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application"""
+    app = FastAPI(
+        title="MediVault API",
+        description="API para gerenciamento de registros médicos com verificação blockchain",
+        version="1.0.0"
+    )
     
-#     app = FastAPI(
-#         title="MediVault API",
-#         description="API para gerenciamento de registros médicos com verificação blockchain",
-#         version="1.0.0"
-#     )
+    # Configurar CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Em produção, especificar origens permitidas
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     
-#     # Configurar CORS
-#     app.add_middleware(
-#         CORSMiddleware,
-#         allow_origins=["*"],  # Em produção, especificar origens permitidas
-#         allow_credentials=True,
-#         allow_methods=["*"],
-#         allow_headers=["*"],
-#     )
+    # Registrar rotas
+    app.include_router(medical_records_router, prefix="/api/v1")
     
-#     # Registrar rotas
-#     app.include_router(medical_records_router, prefix="/api/v1")
+    return app
 
-    
-#     return app
+# Create application instance
+app = create_app()
 
-# # if __name__ == "__main__":
-# #     import uvicorn
-# #     uvicorn.run("main:create_app", host="127.0.0.1", port=8000, reload=True, factory=True)
-
-# from fastapi import FastAPI
-
-# app = FastAPI()
-
-# @app.get("/")
-# def read_root():
-#     return {"message": "Hello, FastAPI"}

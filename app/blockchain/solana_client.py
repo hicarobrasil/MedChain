@@ -1,13 +1,12 @@
+from solders.keypair import Keypair
+from solders.pubkey import Pubkey
+from solders.transaction import Transaction
 from solana.rpc.api import Client
-from solana.keypair import Keypair
-from solana.publickey import PublicKey
-from solana.transaction import Transaction
 import base58
 import hashlib
 import json
 import os
 from typing import Dict, Any
-
 
 class SolanaHashStorage:
     """Classe para armazenar hashes na blockchain da Solana, sem custo para o usuário."""
@@ -56,7 +55,7 @@ class SolanaHashStorage:
         Returns:
             ID da transação.
         """
-        memo_program_id = PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
+        memo_program_id = Pubkey.from_string("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
         memo_data = f"MEDIVAULT:FILE:{file_id}:{file_hash}".encode()
 
         memo_instruction = {

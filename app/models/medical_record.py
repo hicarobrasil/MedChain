@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
 
-from database import Base
+from app.database import Base
 
 class MedicalRecord(Base):
     __tablename__ = "medical_records"

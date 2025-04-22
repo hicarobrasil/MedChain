@@ -5,13 +5,13 @@ from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 
 from app.models.medical_record import MedicalRecord
-from app.blockchain.solana_client import SolanaClient
+from app.blockchain.solana_client import SolanaHashStorage
 from app.storage.aws_client import S3Client
 
 class MedicalRecordService:
     def __init__(self, db: Session):
         self.db = db
-        self.solana_client = SolanaClient()
+        self.solana_client = SolanaHashStorage()
         self.s3_client = S3Client()
         
     def create_medical_record(self, data: Dict[str, Any], file=None) -> MedicalRecord:

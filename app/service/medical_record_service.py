@@ -48,12 +48,12 @@ class MedicalRecordService:
         self.db.refresh(record)
         
         # Calcular o hash dos dados sensíveis
-        record_hash = self.solana_client.hash_medical_record(record.sensitive_data())
+        record_hash = self.solana_client.hash_file(record.sensitive_data())
         record.record_hash = record_hash
         
         # Armazenar o hash na blockchain
         try:
-            tx_id = self.solana_client.store_medical_record_hash(str(record.id), record_hash)
+            tx_id = self.solana_client.store_file_hash(str(record.id), record_hash)
             record.blockchain_tx_id = tx_id
             record.blockchain_verified = True
             self.db.commit()
@@ -71,7 +71,7 @@ class MedicalRecordService:
         # Se encontrou e tem ID de transação, verificar na blockchain
         if record and record.blockchain_tx_id:
             try:
-                verified = self.solana_client.verify_medical_record(
+                verified = self.solana_client.verify_file(
                     str(record.id),
                     record.sensitive_data(),
                     record.blockchain_tx_id

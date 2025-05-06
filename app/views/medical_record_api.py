@@ -1,6 +1,7 @@
 """
 Rotas API para gerenciamento de registros médicos.
 """
+import logging
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from typing import List, Optional
 from sqlalchemy.orm import Session
@@ -9,14 +10,17 @@ from pydantic import BaseModel, Field
 from app.database import get_db
 from app.service.medical_record_service import MedicalRecordService
 from app.models.medical_record import MedicalRecord
+import json
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class MedicalRecordCreate(BaseModel):
     patient_id: str
     doctor_id: str
     description: str
     medications: Optional[List[str]] = []
+
 
 class MedicalRecordResponse(BaseModel):
     id: int
@@ -44,8 +48,19 @@ async def create_medical_record(
 ):
     """Cria um novo registro médico com blockchain."""
     try:
-        import json
+        # Tenta converter medications
+        medications_list = []
         medications_list = json.loads(medications)
+        
+        if medications:
+            try:
+                
+                medications_list = json.loads(medications)
+                if not isinstance(medications_list, list):
+                    raise ValueError("medications deve ser uma lista.")
+            except json.JSONDecodeError:
+                # Se não for JSON válido, faz split por vírgula ("dipirona,nimesulina")
+                medications_list = [med.strip() for med in medications.split(",") if med.strip()]
         
         data = {
             "patient_id": patient_id,
@@ -58,6 +73,7 @@ async def create_medical_record(
         record = service.create_medical_record(data, file)
         
         return record
+    
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -97,7 +113,7 @@ async def blockchain_status(db: Session = Depends(get_db)):
     """Verifica o status da conexão com a blockchain."""
     try:
         service = MedicalRecordService(db)
-        balance = service.solana_client.check_balance()
+        balance = service.solana_client.get_balance()
         return {
             "status": "connected",
             "balance": balance / 10**9,

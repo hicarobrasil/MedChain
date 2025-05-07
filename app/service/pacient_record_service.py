@@ -15,21 +15,23 @@ class PacientService:
 
     def create_pacient(self, data: Dict[str, Any]) -> PacientRecord:
         try:
-            gender = data.get("gender")
-            status = data.get("status")
+            gender_int = data.get("gender")
+            status_int = data.get("status")
 
-            if gender not in GenderEnum._value2member_map_:
+            # Verificação se os inteiros são válidos
+            if gender_int not in GenderEnum._value2member_map_:
                 raise ValueError("Gênero inválido")
-            if status not in StatusEnum._value2member_map_:
+            if status_int not in StatusEnum._value2member_map_:
                 raise ValueError("Status inválido")
-
+                
+            # Salva diretamente como inteiros
             pacient = PacientRecord(
                 name=data.get("name"),
                 dateofbirth=data.get("dateofbirth"),
-                gender=gender,
+                gender=gender_int, 
                 email=data.get("email"),
                 phone=data.get("phone"),
-                status=status,
+                status=status_int, 
             )
 
             self.db.add(pacient)
@@ -53,8 +55,24 @@ class PacientService:
 
     def update_pacient(self, pacient_id: int, update_data: Dict[str, Any]) -> PacientRecord:
         pacient = self.get_pacient_by_id(pacient_id)
+        
+        # Verifica se gender e status são válidos
+        if "gender" in update_data and update_data["gender"] is not None:
+            gender_int = update_data["gender"]
+            if gender_int not in GenderEnum._value2member_map_:
+                raise HTTPException(status_code=400, detail="Gênero inválido")
+            # Mantém como inteiro
+            
+        if "status" in update_data and update_data["status"] is not None:
+            status_int = update_data["status"]
+            if status_int not in StatusEnum._value2member_map_:
+                raise HTTPException(status_code=400, detail="Status inválido")
+            # Mantém como inteiro
+        
+        # Atualiza os campos
         for field, value in update_data.items():
             setattr(pacient, field, value)
+            
         self.db.commit()
         self.db.refresh(pacient)
         return pacient

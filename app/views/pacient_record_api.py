@@ -37,10 +37,9 @@ class PacientResponse(BaseModel):
     class Config:
         orm_mode = True
         
-    # Método para converter de ORM para response model
     @classmethod
     def from_orm(cls, obj):
-        # Cria uma cópia do objeto
+       
         dict_obj = {
             "id": obj.id,
             "name": obj.name,

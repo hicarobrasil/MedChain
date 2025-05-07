@@ -8,6 +8,7 @@ from fastapi import UploadFile
 from typing import Tuple
 
 class S3Client:
+    
     def __init__(self):
         """Inicializa o cliente S3."""
         self.s3 = boto3.client(

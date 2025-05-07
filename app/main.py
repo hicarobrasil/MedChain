@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.views.medical_record_api import router as medical_records_router
+from app.views.pacient_record_api import router as pacient_records_router
 from app.database import init_db
 
 # Initialize the database
@@ -25,6 +26,7 @@ def create_app() -> FastAPI:
     
     # Registrar rotas
     app.include_router(medical_records_router, prefix="/api/v1")
+    app.include_router(pacient_records_router, prefix="/api/v1")
     
     return app
 

@@ -27,10 +27,10 @@ class PacientResponse(BaseModel):
     id: int
     name: str
     dateofbirth: date
-    gender: str  # Retorna como string
+    gender: str  
     email: EmailStr
     phone: str
-    status: str  # Retorna como string
+    status: str  
     date_created: datetime
     date_updated: Optional[datetime] = None
 
@@ -75,28 +75,28 @@ async def create_pacient(
         "status": status  
     }
     pacient = service.create_pacient(data)
-    # Converte manualmente para o formato de resposta
+   
     return PacientResponse.from_orm(pacient)
 
 @router.get("/pacients/{pacient_id}", response_model=PacientResponse)
 def get(pacient_id: int, db: Session = Depends(get_db)):
     service = PacientService(db)
     pacient = service.get_pacient_by_id(pacient_id)
-    # Converte manualmente para o formato de resposta
+  
     return PacientResponse.from_orm(pacient)
 
 @router.get("/pacients", response_model=list[PacientResponse])
 def list_all(db: Session = Depends(get_db)):
     service = PacientService(db)
     pacients = service.get_all_pacients()
-    # Converte cada paciente para o formato de resposta
+  
     return [PacientResponse.from_orm(p) for p in pacients]
 
 @router.put("/pacients/{pacient_id}", response_model=PacientResponse)
 def update(pacient_id: int, update_data: PacientUpdate, db: Session = Depends(get_db)):
     service = PacientService(db)
     pacient = service.update_pacient(pacient_id, update_data.dict(exclude_unset=True))
-    # Converte manualmente para o formato de resposta
+   
     return PacientResponse.from_orm(pacient)
 
 @router.delete("/pacients/{pacient_id}", status_code=status.HTTP_204_NO_CONTENT)

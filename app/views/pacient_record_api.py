@@ -92,11 +92,37 @@ def list_all(db: Session = Depends(get_db)):
   
     return [PacientResponse.from_orm(p) for p in pacients]
 
+from fastapi import Form
+
 @router.put("/pacients/{pacient_id}", response_model=PacientResponse)
-def update(pacient_id: int, update_data: PacientUpdate, db: Session = Depends(get_db)):
+def update(
+    pacient_id: int,
+    name: str = Form(...),
+    dateofbirth: str = Form(...),
+    gender: int = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    status: int = Form(...),
+    db: Session = Depends(get_db)
+):
     service = PacientService(db)
-    pacient = service.update_pacient(pacient_id, update_data.dict(exclude_unset=True))
-   
+
+    from datetime import datetime
+    try:
+        dob = datetime.fromisoformat(dateofbirth)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de data inválido")
+
+    update_data = {
+        "name": name,
+        "dateofbirth": dob,
+        "gender": gender,
+        "email": email,
+        "phone": phone,
+        "status": status
+    }
+
+    pacient = service.update_pacient(pacient_id, update_data)
     return PacientResponse.from_orm(pacient)
 
 @router.delete("/pacients/{pacient_id}", status_code=status.HTTP_204_NO_CONTENT)

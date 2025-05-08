@@ -14,9 +14,7 @@ class GenderEnum(enum.IntEnum):
 class StatusEnum(enum.IntEnum):
     ACTIVE = 0
     INACTIVE = 1
-    PENDING = 2
 
-# Mapeamento para armazenar como string
 GENDER_MAP = {
     0: "MALE",
     1: "FEMALE", 
@@ -26,10 +24,8 @@ GENDER_MAP = {
 STATUS_MAP = {
     0: "ACTIVE",
     1: "INACTIVE",
-    2: "PENDING"
 }
 
-# Mapeamento inverso para conversões
 GENDER_MAP_REVERSE = {v: k for k, v in GENDER_MAP.items()}
 STATUS_MAP_REVERSE = {v: k for k, v in STATUS_MAP.items()}
 

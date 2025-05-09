@@ -1,3 +1,4 @@
+import uuid
 from pydantic import BaseModel, EmailStr
 from datetime import date, datetime
 from typing import Optional
@@ -24,7 +25,7 @@ class PacientUpdate(BaseModel):
     status: Optional[int] 
 
 class PacientResponse(BaseModel):
-    id: int
+    uid: uuid.UUID
     name: str
     dateofbirth: date
     gender: str  
@@ -37,11 +38,11 @@ class PacientResponse(BaseModel):
     class Config:
         orm_mode = True
         
+        
     @classmethod
     def from_orm(cls, obj):
-       
         dict_obj = {
-            "id": obj.id,
+            "uid": obj.uid,
             "name": obj.name,
             "dateofbirth": obj.dateofbirth,
             "gender": GENDER_MAP[obj.gender],  
@@ -75,28 +76,23 @@ async def create_pacient(
         "status": status  
     }
     pacient = service.create_pacient(data)
-   
     return PacientResponse.from_orm(pacient)
 
-@router.get("/pacients/{pacient_id}", response_model=PacientResponse)
-def get(pacient_id: int, db: Session = Depends(get_db)):
+@router.get("/pacients/{pacient_uid}", response_model=PacientResponse)
+def get(pacient_uid: uuid.UUID, db: Session = Depends(get_db)):
     service = PacientService(db)
-    pacient = service.get_pacient_by_id(pacient_id)
-  
+    pacient = service.get_pacient_by_uid(pacient_uid)
     return PacientResponse.from_orm(pacient)
 
 @router.get("/pacients", response_model=list[PacientResponse])
 def list_all(db: Session = Depends(get_db)):
     service = PacientService(db)
     pacients = service.get_all_pacients()
-  
     return [PacientResponse.from_orm(p) for p in pacients]
 
-from fastapi import Form
-
-@router.put("/pacients/{pacient_id}", response_model=PacientResponse)
+@router.put("/pacients/{pacient_uid}", response_model=PacientResponse)
 def update(
-    pacient_id: int,
+    pacient_uid: uuid.UUID,
     name: str = Form(...),
     dateofbirth: str = Form(...),
     gender: int = Form(...),
@@ -107,7 +103,6 @@ def update(
 ):
     service = PacientService(db)
 
-    from datetime import datetime
     try:
         dob = datetime.fromisoformat(dateofbirth)
     except ValueError:
@@ -122,11 +117,11 @@ def update(
         "status": status
     }
 
-    pacient = service.update_pacient(pacient_id, update_data)
+    pacient = service.update_pacient(pacient_uid, update_data)
     return PacientResponse.from_orm(pacient)
 
-@router.delete("/pacients/{pacient_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete(pacient_id: int, db: Session = Depends(get_db)):
+@router.delete("/pacients/{pacient_uid}", status_code=status.HTTP_204_NO_CONTENT)
+def delete(pacient_uid: uuid.UUID, db: Session = Depends(get_db)):
     service = PacientService(db)
-    service.delete_pacient(pacient_id)
+    service.delete_pacient(pacient_uid)
     return {"detail": "Paciente deletado com sucesso"}

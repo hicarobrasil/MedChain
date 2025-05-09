@@ -9,7 +9,7 @@ class MedicalRecord(Base):
     __tablename__ = "medical_records"
 
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("pacient_records.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("pacient_records.uid"), nullable=False)
     doctor_id = Column(String(50), index=True, nullable=False)
     description = Column(Text, nullable=False)
     medications = Column(JSONB, nullable=True)

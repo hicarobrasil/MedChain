@@ -1,5 +1,7 @@
+import uuid
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from datetime import datetime
 import enum
 
@@ -32,7 +34,7 @@ STATUS_MAP_REVERSE = {v: k for k, v in STATUS_MAP.items()}
 class PacientRecord(Base):
     __tablename__ = "pacient_records"
 
-    id = Column(Integer, primary_key=True, index=True)
+    uid = Column(PG_UUID(as_uuid=True), nullable=False, primary_key=True, default=uuid.uuid4)
     name = Column(String(50), index=True, nullable=False)
     dateofbirth = Column(DateTime, nullable=False)
     gender = Column(Integer, nullable=False)  
@@ -62,7 +64,7 @@ class PacientRecord(Base):
 
     def to_dict(self):
         return {
-            "id": self.id,
+            "id": self.uid,
             "name": self.name,
             "dateofbirth": self.dateofbirth.isoformat(),
             "gender": self.gender_name,

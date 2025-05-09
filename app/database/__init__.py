@@ -3,16 +3,13 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from app.settings import Settings
 
-# Carrega variáveis de ambiente, se estiver usando .env
-load_dotenv()
+settings = Settings() 
 
-# URL do banco (pode continuar vindo do ENV)
-# SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URI")
-SQLALCHEMY_DATABASE_URL = "postgresql+psycopg2://postgres:0209@localhost:5432/medchain_db"
+# engine = create_engine(url=settings.SQLALCHEMY_DATABASE_URI)  INFERNOOOOO, VAI SE LASCAR
 
-# Cria o engine
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+engine = create_engine(url='postgresql+psycopg2://postgres:0209@localhost:5432/medchain_db')
 
 # Cria o SessionLocal
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

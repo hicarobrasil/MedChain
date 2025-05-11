@@ -15,6 +15,6 @@ RUN apt-get update && \
 
 ENV PATH="/root/.local/share/solana/install/active_release/bin:${PATH}"
 
-CMD chmod +x /mediVault/entrypoint.sh
+RUN chmod +x /mediVault/entrypoint.sh
 
 ENTRYPOINT ["/mediVault/entrypoint.sh"]

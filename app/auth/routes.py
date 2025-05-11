@@ -1,0 +1,285 @@
+from fastapi import APIRouter
+from app.settings import Settings as settings
+from app.auth.dependencies import RoleChecker
+from app.auth.service import UserService
+from app.auth.utils import (
+    create_access_token,
+    decode_url_safe_token,
+    generate_passwd_hash,
+    verify_password,
+    create_url_safe_token
+)
+
+from app.auth.schemas import (
+    UserCreateModel,
+    UserLoginModel,
+    PasswordResetRequestModel,
+    PasswordResetConfirmModel,
+    TokenResponse,
+)
+from app.database.redis import RedisClient as redis_client
+from app.database import get_db
+from app.models.login_record import User
+from app.errors import (
+    UserAlreadyExists,
+    UserNotFound,
+    InvalidToken,
+    InvalidCredentials,
+)
+from fastapi import BackgroundTasks, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
+import logging
+from app.auth.dependencies import AccessTokenBearer, RefreshTokenBearer, get_current_user
+
+auth_router = APIRouter(prefix="/auth", tags=["auth"])
+user_service = UserService()
+
+# Verificadores de permissão comuns
+admin_role = RoleChecker(["admin"])
+user_or_admin_role = RoleChecker(["admin", "user"])
+
+def send_verification_email(email: str, username: str, token: str):
+    """Função para enviar email de verificação"""
+    link = f"http://{settings.DOMAIN}/api/v1/auth/verify/{token}"
+    
+    html = f"""
+    <h1>Olá {username}, verifique seu email</h1>
+    <p>Por favor, clique neste <a href="{link}">link</a> para verificar seu email.</p>
+    <p>O link é válido por 24 horas.</p>
+    """
+    
+    subject = "Verifique seu email"
+    
+    # Aqui você deve implementar o envio de email
+    # Por exemplo, usando um serviço externo ou enviando para uma fila de tarefas
+    # send_email_task.delay([email], subject, html)
+    
+    # Por enquanto, apenas logamos
+    logging.info(f"Email de verificação enviado para {email}")
+
+@auth_router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=dict)
+def create_user_account(
+    user_data: UserCreateModel,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Cria uma nova conta de usuário"""
+    email = user_data.email
+
+    if user_service.user_exists(email, db):
+        raise UserAlreadyExists()
+
+    new_user = user_service.create_user(user_data, db)
+
+    # Cria um token para verificação de email
+    token = create_url_safe_token({"email": email})
+    
+    # Envia email de verificação em background
+    background_tasks.add_task(
+        send_verification_email, 
+        email=email,
+        username=user_data.username,
+        token=token
+    )
+
+    return {
+        "message": "Conta criada com sucesso! Verifique seu email para ativar sua conta.",
+        "user": {
+            "uid": str(new_user.uid),
+            "username": new_user.username,
+            "email": new_user.email,
+        }
+    }
+
+@auth_router.get("/verify/{token}", status_code=status.HTTP_200_OK)
+def verify_user_account(token: str, db: Session = Depends(get_db)):
+    """Verifica a conta do usuário através do token enviado por email"""
+    token_data = decode_url_safe_token(token)
+    
+    if not token_data:
+        raise InvalidToken()
+
+    user_email = token_data.get("email")
+    
+    if not user_email:
+        raise InvalidToken()
+
+    user = user_service.get_user_by_email(user_email, db)
+    
+    if not user:
+        raise UserNotFound()
+        
+    if user.is_verified:
+        return {"message": "Conta já verificada anteriormente"}
+
+    user_service.update_user(user, {"is_verified": True}, db)
+    
+    return {"message": "Conta verificada com sucesso"}
+
+@auth_router.post("/login", response_model=TokenResponse)
+def login_user(
+    login_data: UserLoginModel, 
+    db: Session = Depends(get_db)
+):
+    """Autentica o usuário e retorna tokens de acesso"""
+    email = login_data.email
+    password = login_data.password
+
+    user = user_service.get_user_by_email(email, db)
+    
+    if not user:
+        raise InvalidCredentials()
+
+    if not verify_password(password, user.password_hash):
+        raise InvalidCredentials()
+        
+    # Criação do access token
+    access_token = create_access_token(
+        user_data={
+            "email": user.email,
+            "user_uid": str(user.uid),
+            "role": user.role,
+        }
+    )
+
+    # Criação do refresh token
+    refresh_token = create_access_token(
+        user_data={
+            "email": user.email,
+            "user_uid": str(user.uid),
+        },
+        refresh=True,
+        expiry=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "uid": str(user.uid),
+            "email": user.email,
+            "username": user.username,
+            "is_verified": user.is_verified,
+            "role": user.role,
+        }
+    }
+
+@auth_router.post("/refresh-token", response_model=dict)
+def refresh_access_token(token_details: dict = Depends(RefreshTokenBearer())):
+    """Gera um novo access token a partir de um refresh token válido"""
+    expiry_timestamp = token_details["exp"]
+
+    if datetime.fromtimestamp(expiry_timestamp) < datetime.utcnow():
+        raise InvalidToken()
+
+    new_access_token = create_access_token(user_data=token_details["user"])
+
+    return {"access_token": new_access_token}
+
+@auth_router.post("/logout", status_code=status.HTTP_200_OK)
+def logout_user(token_details: dict = Depends(AccessTokenBearer())):
+    """Revoga o token atual adicionando-o à blacklist"""
+    jti = token_details["jti"]
+    
+    # Adiciona o token à blacklist
+    expiry = token_details["exp"]
+    ttl = expiry - int(datetime.utcnow().timestamp())
+    
+    redis_client.add_token_to_blacklist(jti, ttl)
+    
+    return {"message": "Logout realizado com sucesso"}
+
+@auth_router.get("/me", response_model=dict)
+def get_user_profile(current_user: User = Depends(get_current_user)):
+    """Retorna informações do usuário atual"""
+    return {
+        "uid": str(current_user.uid),
+        "username": current_user.username,
+        "email": current_user.email,
+        "is_verified": current_user.is_verified,
+        "role": current_user.role,
+        "date_created": current_user.date_created.isoformat(),
+        "date_updated": current_user.date_updated.isoformat(),
+    }
+
+@auth_router.post("/reset-password-request", status_code=status.HTTP_200_OK)
+def request_password_reset(
+    reset_request: PasswordResetRequestModel,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Solicita redefinição de senha enviando um email com um link"""
+    email = reset_request.email
+    
+    user = user_service.get_user_by_email(email, db)
+    
+    if not user:
+        # Não revelamos se o usuário existe por segurança
+        return {"message": "Se o email existir no sistema, você receberá instruções para redefinir sua senha."}
+    
+    # Cria token para redefinição de senha
+    token = create_url_safe_token({"email": email, "type": "password_reset"})
+    
+    link = f"http://{settings.DOMAIN}/reset-password/{token}"
+    
+    html = f"""
+    <h1>Redefinição de Senha</h1>
+    <p>Olá {user.username},</p>
+    <p>Você solicitou a redefinição de sua senha. Clique no <a href="{link}">link</a> para definir uma nova senha.</p>
+    <p>O link é válido por 24 horas.</p>
+    <p>Se você não solicitou essa redefinição, por favor ignore este email.</p>
+    """
+    
+    subject = "Redefinição de Senha"
+    
+    # Aqui você deve implementar o envio de email
+    # Por exemplo, usando um serviço externo ou enviando para uma fila de tarefas
+    # send_email_task.delay([email], subject, html)
+    
+    # Por enquanto, apenas logamos
+    logging.info(f"Email de redefinição de senha enviado para {email}")
+    
+    return {"message": "Se o email existir no sistema, você receberá instruções para redefinir sua senha."}
+
+@auth_router.post("/reset-password/{token}", status_code=status.HTTP_200_OK)
+def reset_password(
+    token: str,
+    password_data: PasswordResetConfirmModel,
+    db: Session = Depends(get_db),
+):
+    """Redefine a senha do usuário utilizando o token recebido por email"""
+    # Verifica se as senhas coincidem
+    if password_data.new_password != password_data.confirm_new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="As senhas não coincidem",
+        )
+    
+    # Decodifica o token
+    token_data = decode_url_safe_token(token)
+    
+    if not token_data:
+        raise InvalidToken()
+        
+    email = token_data.get("email")
+    reset_type = token_data.get("type")
+    
+    if not email or reset_type != "password_reset":
+        raise InvalidToken()
+    
+    # Busca o usuário
+    user = user_service.get_user_by_email(email, db)
+    
+    if not user:
+        raise UserNotFound()
+    
+    # Atualiza a senha do usuário
+    password_hash = generate_passwd_hash(password_data.new_password)
+    user_service.update_user(user, {"password_hash": password_hash}, db)
+    
+    # Invalidar todos os tokens existentes seria uma boa prática de segurança
+    # Mas isso exigiria uma implementação adicional
+    
+    return {"message": "Senha redefinida com sucesso"}

@@ -7,7 +7,9 @@ from app.settings import Settings
 
 settings = Settings() 
 
-# engine = create_engine(url=settings.SQLALCHEMY_DATABASE_URI)  INFERNOOOOO, VAI SE LASCAR
+# Convert asyncpg to psycopg2 driver for synchronous SQLAlchemy
+db_url = settings.DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2')
+# engine = create_engine(url=db_url)
 
 engine = create_engine(url='postgresql+psycopg2://postgres:0209@localhost:5432/medchain_db')
 

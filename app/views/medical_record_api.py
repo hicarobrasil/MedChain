@@ -12,7 +12,7 @@ from app.service.medical_record_service import MedicalRecordService
 from app.models.medical_record import MedicalRecord
 import json
 
-router = APIRouter()
+router = APIRouter(tags=["Medical Records"])
 logger = logging.getLogger(__name__)
 
 class MedicalRecordCreate(BaseModel):

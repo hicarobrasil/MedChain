@@ -54,7 +54,7 @@ class PacientResponse(BaseModel):
         }
         return cls(**dict_obj)
 
-router = APIRouter()
+router = APIRouter(tags=["Pacient"])
 
 @router.post("/pacients", response_model=PacientResponse, status_code=status.HTTP_201_CREATED)
 async def create_pacient(

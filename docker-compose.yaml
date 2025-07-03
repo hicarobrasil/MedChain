@@ -1,9 +1,16 @@
+version: "3.8"
+
 volumes:
   medivault_db:
     name: medivault_db_storage
+  redis_data:
+
+networks:
+  auth_network:
+    driver: bridge
 
 services:
-  
+
   postgres:
     container_name: postgres
     image: postgres:13
@@ -12,11 +19,32 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: medchain_db
     ports:
-      - "${POSTGRES_PORT}:5432"  
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - medivault_db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth_network
+
+  redis:
+    image: redis:7
+    container_name: fastapi_auth_redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    env_file:
+      - .env
+    volumes:
+      - redis_data:/data
+    networks:
+      - auth_network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -27,6 +55,8 @@ services:
   #   ports:
   #     - "8899:8899"
   #   command: solana-test-validator --rpc-port 8899 --no-bpf-jit
+  #   networks:
+  #     - auth_network
 
   medivault:
     build: ./app
@@ -34,14 +64,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      # solana:
-      #   condition: service_started
+      redis:
+        condition: service_healthy
     entrypoint: >
       gunicorn -b 0.0.0.0:8300 main:app
       --workers=1 --threads=2 --worker-class=gthread
       --reload --timeout 120 --access-logfile '-'
     environment:
-      - SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/medchain_db${DATABASE_ENVIRONMENT_SUFFIX}  # Corrigido
-      - AMAZON_S3_ACCESS_KEY_ID=${MEDICAL_RECORDS_API_AMAZON_S3_ACCESS_KEY_ID}  # Corrigido
-      - AMAZON_S3_SECRET_ACCESS_KEY=${MEDICAL_RECORDS_API_AMAZON_S3_SECRET_ACCESS_KEY}  # Corrigido
-      - AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID=${MEDICAL_RECORDS_API_AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID}  # Corrigido
+      - SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/medchain_db${DATABASE_ENVIRONMENT_SUFFIX}
+      - AMAZON_S3_ACCESS_KEY_ID=${MEDICAL_RECORDS_API_AMAZON_S3_ACCESS_KEY_ID}
+      - AMAZON_S3_SECRET_ACCESS_KEY=${MEDICAL_RECORDS_API_AMAZON_S3_SECRET_ACCESS_KEY}
+      - AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID=${MEDICAL_RECORDS_API_AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID}
+    networks:
+      - auth_network
+    ports:
+      - "8300:8300"

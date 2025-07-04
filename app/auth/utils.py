@@ -11,7 +11,7 @@ from app.settings import Settings
 
 settings = Settings()
 
-passwd_context = CryptContext(schemes=["bcrypt"])
+passwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def generate_passwd_hash(password: str) -> str:
     return passwd_context.hash(password)
@@ -22,6 +22,7 @@ def verify_password(password: str, hash_str: str) -> bool:
 def create_access_token(
     user_data: dict, expiry: timedelta = None, refresh: bool = False
 ) -> str:
+    breakpoint()
     payload = {
         "user": user_data,
         "exp": datetime.utcnow() + (

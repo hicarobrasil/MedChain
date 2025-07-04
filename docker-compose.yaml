@@ -13,11 +13,13 @@ services:
 
   postgres:
     container_name: postgres
-    image: postgres:13
+    image: postgres:17
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: medchain_db
+    env_file: # Adicionado para carregar todas as variáveis do .env consistentemente
+      - .env
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
@@ -44,7 +46,7 @@ services:
       - auth_network
     restart: always
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"] # Adicionado -a ${REDIS_PASSWORD} para autenticar
       interval: 10s
       timeout: 5s
       retries: 5
@@ -75,6 +77,8 @@ services:
       - AMAZON_S3_ACCESS_KEY_ID=${MEDICAL_RECORDS_API_AMAZON_S3_ACCESS_KEY_ID}
       - AMAZON_S3_SECRET_ACCESS_KEY=${MEDICAL_RECORDS_API_AMAZON_S3_SECRET_ACCESS_KEY}
       - AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID=${MEDICAL_RECORDS_API_AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID}
+    env_file: # Adicionado para carregar todas as variáveis do .env
+      - .env
     networks:
       - auth_network
     ports:

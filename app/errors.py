@@ -2,10 +2,10 @@
 from fastapi import HTTPException, status
 
 class InvalidCredentials(HTTPException):
-    def __init__(self):
+    def __init__(self, detail: str = "Credenciais inválidas"):
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciais inválidas",
+            detail=detail,
         )
 
 class UserAlreadyExists(HTTPException):
@@ -16,17 +16,17 @@ class UserAlreadyExists(HTTPException):
         )
 
 class UserNotFound(HTTPException):
-    def __init__(self):
+    def __init__(self, detail: str = "Usuário não encontrado"):
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuário não encontrado",
+            detail=detail,
         )
 
 class InvalidToken(HTTPException):
-    def __init__(self):
+    def __init__(self, detail: str = "Token inválido ou expirado"):
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido ou expirado",
+            detail=detail,
         )
 
 class AccessTokenRequired(HTTPException):

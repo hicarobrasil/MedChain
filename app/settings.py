@@ -22,13 +22,20 @@ class Settings(BaseSettings):
 
     # Banco de dados
     DATABASE_URL: str
+    POSTGRES_HOST: str
     POSTGRES_PORT: int
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str 
+    DATABASE_ENVIRONMENT_SUFFIX: Optional[str] = None
 
     # Redis
     REDIS_URL: str
     REDIS_PASSWORD: Optional[str] = None
+
+    # Amazon S3
+    MEDICAL_RECORDS_API_AMAZON_S3_ACCESS_KEY_ID: str
+    MEDICAL_RECORDS_API_AMAZON_S3_SECRET_ACCESS_KEY: str
+    MEDICAL_RECORDS_API_AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID: str
 
     # E-mail
     SMTP_SERVER: str

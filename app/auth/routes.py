@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.settings import Settings as settings
+from app.settings import get_settings
 from app.auth.dependencies import RoleChecker
 from app.auth.service import UserService
 from app.auth.utils import (
@@ -17,7 +17,7 @@ from app.auth.schemas import (
     PasswordResetConfirmModel,
     TokenResponse,
 )
-from app.database.redis import RedisClient as redis_client
+from app.database.redis import RedisClient
 from app.database import get_db
 from app.models.login_record import User
 from app.errors import (
@@ -34,8 +34,9 @@ from app.auth.dependencies import AccessTokenBearer, RefreshTokenBearer, get_cur
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 user_service = UserService()
+settings = get_settings()
+redis_client = RedisClient() 
 
-# Verificadores de permissão comuns
 admin_role = RoleChecker(["admin"])
 user_or_admin_role = RoleChecker(["admin", "user"])
 
@@ -51,11 +52,6 @@ def send_verification_email(email: str, username: str, token: str):
     
     subject = "Verifique seu email"
     
-    # Aqui você deve implementar o envio de email
-    # Por exemplo, usando um serviço externo ou enviando para uma fila de tarefas
-    # send_email_task.delay([email], subject, html)
-    
-    # Por enquanto, apenas logamos
     logging.info(f"Email de verificação enviado para {email}")
 
 @auth_router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=dict)
@@ -72,10 +68,8 @@ def create_user_account(
 
     new_user = user_service.create_user(user_data, db)
 
-    # Cria um token para verificação de email
     token = create_url_safe_token({"email": email})
     
-    # Envia email de verificação em background
     background_tasks.add_task(
         send_verification_email, 
         email=email,
@@ -134,7 +128,6 @@ def login_user(
     if not verify_password(password, user.password_hash):
         raise InvalidCredentials()
         
-    # Criação do access token
     access_token = create_access_token(
         user_data={
             "email": user.email,
@@ -143,14 +136,13 @@ def login_user(
         }
     )
 
-    # Criação do refresh token
     refresh_token = create_access_token(
         user_data={
             "email": user.email,
             "user_uid": str(user.uid),
         },
         refresh=True,
-        expiry=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        expiry_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,  # converter dias para segundos
     )
 
     return {
@@ -183,7 +175,6 @@ def logout_user(token_details: dict = Depends(AccessTokenBearer())):
     """Revoga o token atual adicionando-o à blacklist"""
     jti = token_details["jti"]
     
-    # Adiciona o token à blacklist
     expiry = token_details["exp"]
     ttl = expiry - int(datetime.utcnow().timestamp())
     
@@ -216,10 +207,8 @@ def request_password_reset(
     user = user_service.get_user_by_email(email, db)
     
     if not user:
-        # Não revelamos se o usuário existe por segurança
         return {"message": "Se o email existir no sistema, você receberá instruções para redefinir sua senha."}
     
-    # Cria token para redefinição de senha
     token = create_url_safe_token({"email": email, "type": "password_reset"})
     
     link = f"http://{settings.DOMAIN}/reset-password/{token}"
@@ -233,12 +222,6 @@ def request_password_reset(
     """
     
     subject = "Redefinição de Senha"
-    
-    # Aqui você deve implementar o envio de email
-    # Por exemplo, usando um serviço externo ou enviando para uma fila de tarefas
-    # send_email_task.delay([email], subject, html)
-    
-    # Por enquanto, apenas logamos
     logging.info(f"Email de redefinição de senha enviado para {email}")
     
     return {"message": "Se o email existir no sistema, você receberá instruções para redefinir sua senha."}
@@ -250,14 +233,12 @@ def reset_password(
     db: Session = Depends(get_db),
 ):
     """Redefine a senha do usuário utilizando o token recebido por email"""
-    # Verifica se as senhas coincidem
     if password_data.new_password != password_data.confirm_new_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="As senhas não coincidem",
         )
     
-    # Decodifica o token
     token_data = decode_url_safe_token(token)
     
     if not token_data:
@@ -269,17 +250,12 @@ def reset_password(
     if not email or reset_type != "password_reset":
         raise InvalidToken()
     
-    # Busca o usuário
     user = user_service.get_user_by_email(email, db)
     
     if not user:
         raise UserNotFound()
     
-    # Atualiza a senha do usuário
     password_hash = generate_passwd_hash(password_data.new_password)
     user_service.update_user(user, {"password_hash": password_hash}, db)
-    
-    # Invalidar todos os tokens existentes seria uma boa prática de segurança
-    # Mas isso exigiria uma implementação adicional
     
     return {"message": "Senha redefinida com sucesso"}

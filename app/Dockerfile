@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-WORKDIR /mediVault
+WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -14,7 +14,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/root/.local/share/solana/install/active_release/bin:${PATH}"
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+RUN chmod +x /app/entrypoint.sh
 
-RUN chmod +x /mediVault/entrypoint.sh
-
-ENTRYPOINT ["/mediVault/entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]

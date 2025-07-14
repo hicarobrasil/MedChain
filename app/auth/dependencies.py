@@ -10,12 +10,14 @@ from app.database import get_db as get_session
 from app.errors import AccessTokenRequired, InvalidToken, RefreshTokenRequired, UserNotFound, InsufficientPermission, AccountNotVerified
 from app.models.login_record import User
 from app.database.redis import RedisClient
+from app.settings import get_settings
 
 from .service import UserService
 from .utils import decode_token
 
 user_service = UserService()
 redis_client = RedisClient()  # Instanciar o cliente Redis
+settings = get_settings()
 
 class TokenBearer(HTTPBearer):
 
@@ -51,6 +53,17 @@ class TokenBearer(HTTPBearer):
             jti = token_data.get("jti")
             if jti and redis_client.is_token_blacklisted(jti):
                 raise InvalidToken("Token revogado ou inválido")
+
+            # Verificar se o usuário existe e está verificado
+            db = next(get_session())
+            user_email = token_data.get("user", {}).get("email")
+            if user_email:
+                user = user_service.get_user_by_email(user_email, db)
+                if not user:
+                    raise UserNotFound()
+                
+                if not user.is_verified:
+                    raise AccountNotVerified()
 
             self.verify_token_data(token_data)
 

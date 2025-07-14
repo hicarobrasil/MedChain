@@ -10,6 +10,14 @@ from pydantic import BaseModel, Field
 from app.database import get_db
 from app.service.medical_record_service import MedicalRecordService
 from app.models.medical_record import MedicalRecord
+from app.dependencies import (
+    token_auth, 
+    admin_only, 
+    user_or_admin,
+    verify_record_access,
+    verify_patient_records_access,
+    verify_doctor_records_access
+)
 import json
 
 router = APIRouter(tags=["Medical Records"])
@@ -44,17 +52,15 @@ async def create_medical_record(
     description: str = Form(...),
     medications: str = Form("[]"),
     file: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(user_or_admin)  # Requer autenticação de usuário ou admin
 ):
     """Cria um novo registro médico com blockchain."""
     try:
         # Tenta converter medications
         medications_list = []
-        medications_list = json.loads(medications)
-        
         if medications:
             try:
-                
                 medications_list = json.loads(medications)
                 if not isinstance(medications_list, list):
                     raise ValueError("medications deve ser uma lista.")
@@ -81,7 +87,11 @@ async def create_medical_record(
         )
 
 @router.get("/medical-records/{record_id}", response_model=MedicalRecordResponse)
-async def get_medical_record(record_id: int, db: Session = Depends(get_db)):
+async def get_medical_record(
+    record_id: int, 
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_record_access)  # Verifica acesso ao registro específico
+):
     """Busca um registro médico pelo ID."""
     service = MedicalRecordService(db)
     record = service.get_medical_record(record_id)
@@ -95,21 +105,32 @@ async def get_medical_record(record_id: int, db: Session = Depends(get_db)):
     return record
 
 @router.get("/medical-records/patient/{patient_id}", response_model=List[MedicalRecordResponse])
-async def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
+async def get_patient_records(
+    patient_id: str, 
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_patient_records_access)  # Verifica acesso aos registros do paciente
+):
     """Busca todos os registros médicos de um paciente."""
     service = MedicalRecordService(db)
     records = service.get_medical_records_by_patient(patient_id)
     return records
 
 @router.get("/medical-records/doctor/{doctor_id}", response_model=List[MedicalRecordResponse])
-async def get_doctor_records(doctor_id: str, db: Session = Depends(get_db)):
+async def get_doctor_records(
+    doctor_id: str, 
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_doctor_records_access)  # Verifica acesso aos registros do médico
+):
     """Busca todos os registros médicos de um médico."""
     service = MedicalRecordService(db)
     records = service.get_medical_records_by_doctor(doctor_id)
     return records
 
 @router.get("/blockchain/status")
-async def blockchain_status(db: Session = Depends(get_db)):
+async def blockchain_status(
+    db: Session = Depends(get_db),
+    _: bool = Depends(admin_only)  
+):
     """Verifica o status da conexão com a blockchain."""
     try:
         service = MedicalRecordService(db)

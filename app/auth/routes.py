@@ -54,6 +54,7 @@ def send_verification_email(email: str, username: str, token: str):
     
     logging.info(f"Email de verificação enviado para {email}")
 
+
 @auth_router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=dict)
 def create_user_account(
     user_data: UserCreateModel,
@@ -100,6 +101,21 @@ def verify_user_account(token: str, db: Session = Depends(get_db)):
         raise InvalidToken()
 
     user = user_service.get_user_by_email(user_email, db)
+    
+    if not user:
+        raise UserNotFound()
+        
+    if user.is_verified:
+        return {"message": "Conta já verificada anteriormente"}
+
+    user_service.update_user(user, {"is_verified": True}, db)
+    
+    return {"message": "Conta verificada com sucesso"}
+
+@auth_router.post("/verify-account/{email}", status_code=status.HTTP_200_OK)
+def verify_account_manual(email: str, db: Session = Depends(get_db)):
+    """Verifica a conta do usuário manualmente (apenas para testes)"""
+    user = user_service.get_user_by_email(email, db)
     
     if not user:
         raise UserNotFound()

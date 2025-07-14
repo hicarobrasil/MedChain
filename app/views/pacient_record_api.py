@@ -7,6 +7,7 @@ from app.database import get_db
 from app.service.pacient_record_service import PacientService
 from sqlalchemy.orm import Session
 from app.models.pacient_record import GENDER_MAP, STATUS_MAP
+from app.dependencies import token_auth, admin_only, user_or_admin, verify_patient_access
 
 class PacientCreate(BaseModel):
     name: str
@@ -64,7 +65,8 @@ async def create_pacient(
     email: EmailStr = Form(...),
     phone: str = Form(...),
     status: int = Form(...), 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(admin_only)  # Apenas admin pode criar pacientes
 ):
     service = PacientService(db)
     data = {
@@ -79,19 +81,26 @@ async def create_pacient(
     return PacientResponse.from_orm(pacient)
 
 @router.get("/pacients/{pacient_uid}", response_model=PacientResponse)
-def get(pacient_uid: uuid.UUID, db: Session = Depends(get_db)):
+async def get_pacient(
+    pacient_uid: uuid.UUID, 
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_patient_access)  # Verifica se o usuário tem acesso ao paciente
+):
     service = PacientService(db)
     pacient = service.get_pacient_by_uid(pacient_uid)
     return PacientResponse.from_orm(pacient)
 
 @router.get("/pacients", response_model=list[PacientResponse])
-def list_all(db: Session = Depends(get_db)):
+async def list_all_pacients(
+    db: Session = Depends(get_db),
+    _: bool = Depends(admin_only)  # Apenas admin pode listar todos os pacientes
+):
     service = PacientService(db)
     pacients = service.get_all_pacients()
     return [PacientResponse.from_orm(p) for p in pacients]
 
 @router.put("/pacients/{pacient_uid}", response_model=PacientResponse)
-def update(
+async def update_pacient(
     pacient_uid: uuid.UUID,
     name: str = Form(...),
     dateofbirth: str = Form(...),
@@ -99,7 +108,8 @@ def update(
     email: str = Form(...),
     phone: str = Form(...),
     status: int = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: bool = Depends(admin_only)  # Apenas admin pode atualizar pacientes
 ):
     service = PacientService(db)
 
@@ -121,7 +131,11 @@ def update(
     return PacientResponse.from_orm(pacient)
 
 @router.delete("/pacients/{pacient_uid}", status_code=status.HTTP_204_NO_CONTENT)
-def delete(pacient_uid: uuid.UUID, db: Session = Depends(get_db)):
+async def delete_pacient(
+    pacient_uid: uuid.UUID, 
+    db: Session = Depends(get_db),
+    _: bool = Depends(admin_only)  # Apenas admin pode deletar pacientes
+):
     service = PacientService(db)
     service.delete_pacient(pacient_uid)
     return {"detail": "Paciente deletado com sucesso"}

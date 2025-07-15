@@ -96,3 +96,19 @@ class MedicalRecordService:
         return self.db.query(MedicalRecord).filter(
             MedicalRecord.doctor_id == doctor_id
         ).order_by(MedicalRecord.date_created.desc()).all()
+        
+    def get_all_medical_records(self, skip: int = 0, limit: int = 100) -> List[MedicalRecord]:
+        """Busca todos os registros médicos com paginação."""
+        return self.db.query(MedicalRecord).offset(skip).limit(limit).all()
+        
+    def get_patient_medical_records(self, patient_id) -> List[MedicalRecord]:
+        """Busca todos os registros médicos de um paciente."""
+        return self.db.query(MedicalRecord).filter(
+            MedicalRecord.patient_id == patient_id
+        ).order_by(MedicalRecord.date_created.desc()).all()
+        
+    def get_doctor_medical_records(self, doctor_id) -> List[MedicalRecord]:
+        """Busca todos os registros médicos de um médico."""
+        return self.db.query(MedicalRecord).filter(
+            MedicalRecord.doctor_id == doctor_id
+        ).order_by(MedicalRecord.date_created.desc()).all()

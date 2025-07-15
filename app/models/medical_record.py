@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from datetime import datetime
 
 from app.database import Base
@@ -9,8 +9,8 @@ class MedicalRecord(Base):
     __tablename__ = "medical_records"
 
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("pacient_records.uid"), nullable=False)
-    doctor_id = Column(String(50), index=True, nullable=False)
+    patient_id = Column(PG_UUID(as_uuid=True), ForeignKey("pacient_records.uid"), nullable=False)
+    doctor_id = Column(PG_UUID(as_uuid=True), ForeignKey("doctor_records.uid"), nullable=False)
     description = Column(Text, nullable=False)
     medications = Column(JSONB, nullable=True)
     date_requested = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -25,6 +25,9 @@ class MedicalRecord(Base):
 
     # Relacionamento com PacientRecord
     patient = relationship("PacientRecord", back_populates="medical_records")
+    
+    # Relacionamento com DoctorRecord (comentado temporariamente para testes)
+    # doctor = relationship("DoctorRecord", back_populates="medical_records")
 
     def to_dict(self):
         return {

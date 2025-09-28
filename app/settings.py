@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
 
+
 class Settings(BaseSettings):
     # Geral
     APP_NAME: str = "FastAPI Auth Service"
@@ -12,9 +13,9 @@ class Settings(BaseSettings):
     # Autenticação
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 # 30 minutos
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutos
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    ACCESS_TOKEN_EXPIRE_SECONDS: int = 3600 # 1 hora
+    ACCESS_TOKEN_EXPIRE_SECONDS: int = 3600  # 1 hora
 
     # Domínio
     DOMAIN: str = "localhost:8000"
@@ -25,7 +26,7 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str
     POSTGRES_PORT: int
     POSTGRES_USER: str
-    POSTGRES_PASSWORD: str 
+    POSTGRES_PASSWORD: str
     DATABASE_ENVIRONMENT_SUFFIX: Optional[str] = None
 
     # Redis
@@ -47,6 +48,8 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "allow"
+
 
 @lru_cache()
 def get_settings() -> Settings:

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     DATABASE_ENVIRONMENT_SUFFIX: Optional[str] = None
+    SQLALCHEMY_DATABASE_URI: Optional[str] = None
 
     # Redis
     REDIS_URL: str
@@ -54,3 +55,5 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+settings = get_settings()

@@ -36,12 +36,12 @@ class MedicalRecordService:
         )
 
         # Se um arquivo foi fornecido, fazer upload para o S3
-        if file:
-            file_url, file_hash = self.s3_client.upload_file(
-                file, f"medical_records/{record.patient_id}/{record.id}_{file.filename}"
-            )
-            record.file_url = file_url
-            record.file_hash = file_hash
+        # if file:
+        #     file_url, file_hash = self.s3_client.upload_file(
+        #         file, f"medical_records/{record.patient_id}/{record.id}_{file.filename}"
+        #     )
+        #     record.file_url = file_url
+        #     record.file_hash = file_hash
 
         # Salvar o registro no banco de dados para obter o ID
         self.db.add(record)

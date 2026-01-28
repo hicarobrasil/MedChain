@@ -1,4 +1,3 @@
-from datetime import datetime
 from uuid import UUID
 
 from app.database import get_session
@@ -63,20 +62,12 @@ class DoctorView:
             email=doctor_data.email,
             password=doctor_data.password,
             status=StatusEnum.ACTIVE,
-        )
+        ).save()
 
-        new_doctor = DoctorModel(
+        DoctorModel(
             CRM=doctor_data.CRM,
             specialty=SpecialtyEnum(doctor_data.specialty),
             user=user,
-        )
-
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-        db.add(new_doctor)
-        db.commit()
-        db.refresh(new_doctor)
+        ).save()
 
         return 201

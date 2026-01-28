@@ -1,5 +1,5 @@
 from app.service.pacient_record_service import PacientService
-from app.models.pacient_record import PacientRecord
+from app.models.patient import PacientRecord
 import pytest
 from unittest.mock import MagicMock
 

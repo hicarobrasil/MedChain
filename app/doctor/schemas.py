@@ -13,18 +13,19 @@ class DoctorBase(BaseModel):
     hospital_affiliation: Optional[str] = None
     office_address: Optional[str] = None
 
-class DoctorCreate(DoctorBase):
-    pass
+class DoctorIn(BaseModel):
+    CRM: str
+    specialty: str
+    full_name: str
+    email: str
+    password: str
 
 class DoctorUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=2, max_length=100)
     crm: Optional[str] = Field(default=None, min_length=4, max_length=20)
     specialty: Optional[Union[int, str]] = None
     email: Optional[EmailStr] = None
-    phone: Optional[str] = Field(default=None, min_length=8, max_length=20)
     status: Optional[Union[int, str]] = None
-    hospital_affiliation: Optional[str] = None
-    office_address: Optional[str] = None
 
 class DoctorOut(BaseModel):
     uid: UUID

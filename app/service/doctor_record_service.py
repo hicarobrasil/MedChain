@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from app.models.doctor_record import DoctorRecord, SpecialtyEnum, StatusEnum
+from app.models.doctor import DoctorRecord, SpecialtyEnum, StatusEnum
 
 class DoctorService:
     def __init__(self, db: Session):

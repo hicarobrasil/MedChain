@@ -1,13 +1,31 @@
 from typing import Optional
-from sqlmodel import select
-from sqlalchemy.orm import Session  
+from sqlalchemy.orm import Session
 
+from jwt import ExpiredSignatureError, InvalidTokenError
 from app.models.login_record import User
 from .schemas import UserCreateModel
-from .utils import generate_passwd_hash
+from .utils import decode_jwt, generate_passwd_hash
 
-class UserService:
-    
+
+class SessionDataSource:
+
+    @classmethod
+    def get_token(cls, token: str) -> dict:
+
+        try:
+            token_contents = decode_jwt(token)
+
+        except (ExpiredSignatureError, KeyError):
+            raise ExpiredSignatureError
+
+        except (InvalidTokenError, ValueError):
+            raise InvalidTokenError
+
+        return token_contents
+
+
+class UsuarioTokenService:
+
     def get_user_by_email(self, email: str, db: Session) -> Optional[User]:
         return db.query(User).filter(User.email == email).first()
 
@@ -18,14 +36,14 @@ class UserService:
     def create_user(self, user_data: UserCreateModel, db: Session) -> User:
         data = user_data.dict()
         password = data.pop("password")
-        
+
         new_user = User(
             **data,
             password_hash=generate_passwd_hash(password),
             role="user",
             is_verified=False
         )
-        
+
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
@@ -35,7 +53,7 @@ class UserService:
         for key, value in user_data.items():
             if hasattr(user, key):
                 setattr(user, key, value)
-        
+
         db.commit()
         db.refresh(user)
         return user

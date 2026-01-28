@@ -1,35 +1,38 @@
-import os
-from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from typing import Generator
+
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import Session as SQLAlchemySession
+
 from app.settings import Settings
 
-settings = Settings() 
+settings = Settings()
 
-# Convert asyncpg to psycopg2 driver for synchronous SQLAlchemy
-db_url = settings.DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2')
-# engine = create_engine(url=db_url)
 
-engine = create_engine(url='postgresql+psycopg2://postgres:0209@localhost:5432/medchain_db')
+engine = create_engine(
+    url=settings.SQLALCHEMY_DATABASE_URI,
+    pool_pre_ping=True,
+    pool_use_lifo=True,
+    pool_size=30,
+    max_overflow=15,
+    pool_recycle=1800,
+    connect_args={"charset": "utf8mb4"},
+)
 
 # Cria o SessionLocal
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Session = sessionmaker(engine)
 
-# Base para os modelos
-Base = declarative_base()
 
-def init_db():
-    """Cria as tabelas caso não existam."""
-    Base.metadata.create_all(bind=engine)
+def get_session() -> Generator[SQLAlchemySession, None, None]:
+    with Session.begin() as session:
+        yield session
 
-def get_db():
-    """
-    Dependência do FastAPI para obter uma sessão de DB.
-    Gera e depois fecha a sessão automaticamente.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
+class Base(DeclarativeBase):
+    def delete(self):
+        session = inspect(self).session
+        session.delete(self)
+        session.commit()
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} { self.id}>"

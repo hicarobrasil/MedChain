@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from app.database import get_db
 from app.service.pacient_record_service import PacientService
 from sqlalchemy.orm import Session
-from app.models.pacient_record import GENDER_MAP, STATUS_MAP
+from app.models.patient import GENDER_MAP, STATUS_MAP
 from app.dependencies import token_auth, admin_only, user_or_admin, verify_patient_access
 
 class PacientCreate(BaseModel):

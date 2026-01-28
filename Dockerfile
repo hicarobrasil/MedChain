@@ -1,11 +1,10 @@
-FROM python:3.9-slim
+FROM python:3.11-buster
 
-WORKDIR /app
+ADD ./medchain
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /medchain
 
-COPY . .
+RUN pip install -r requirements.txt
 
 RUN apt-get update && \
     apt-get install -y curl && \
@@ -15,6 +14,6 @@ RUN apt-get update && \
 
 ENV PATH="/root/.local/share/solana/install/active_release/bin:${PATH}"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x entrypoint.sh
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT [".entrypoint.sh"]

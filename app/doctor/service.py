@@ -2,7 +2,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from app.models.doctor_record import DoctorRecord, SpecialtyEnum, StatusEnum, SPECIALTY_MAP_REVERSE, STATUS_MAP_REVERSE
+from app.models.doctor import DoctorRecord, StatusEnum, SPECIALTY_MAP_REVERSE, STATUS_MAP_REVERSE
 from app.doctor.schemas import DoctorCreate, DoctorUpdate
 
 class DoctorService:

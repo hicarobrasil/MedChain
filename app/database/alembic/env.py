@@ -16,12 +16,12 @@ fileConfig(config.config_file_name)  # type: ignore
 config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
 
 # Importa todos os models para o Alembic detectar
-from app.models.doctor import Doctor  # noqa
-from app.models.patient import Paciente  # noqa
-from app.models.user import Usuario  # noqa
-from app.models.address import Endereco  # noqa
-from app.models.file import Arquivo  # noqa
-from app.models.medical_record import MedicalRecord  # noqa
+from app.models.doctor import DoctorModel  # noqa
+from app.models.patient import PatientModel  # noqa
+from app.models.user import UserModel  # noqa
+from app.models.address import AddressModel  # noqa
+from app.models.file import FileModel  # noqa
+from app.models.medical_record import MedicalRecordModel  # noqa
 from app.models.login_record import User  # noqa
 
 # add your model's MetaData object here

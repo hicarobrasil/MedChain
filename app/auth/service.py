@@ -24,7 +24,7 @@ class SessionDataSource:
         return token_contents
 
 
-class UsuarioTokenService:
+class UserTokenService:
 
     def get_user_by_email(self, email: str, db: Session) -> Optional[User]:
         return db.query(User).filter(User.email == email).first()

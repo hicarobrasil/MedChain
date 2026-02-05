@@ -1,3 +1,4 @@
+from uuid import UUID
 from app.database import Base
 from sqlalchemy import (
     Integer,
@@ -5,14 +6,15 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 
 
-class Address(Base):
+class AddressModel(Base):
     __tablename__ = "address"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    public_id: Mapped[str] = mapped_column(UUID, unique=True, index=True)
     street: Mapped[str] = mapped_column(String)
     number: Mapped[str] = mapped_column(String)
     complement: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -13,7 +13,7 @@ class StatusEnum(Enum):
     SUSPENDED = "SUSPENDED"
 
 
-class User(Base):
+class UserModel(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)

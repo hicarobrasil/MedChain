@@ -20,7 +20,7 @@ class ConsultationModel(Base):
     created_date: Mapped[datetime] = mapped_column(DateTime)
     updated_date: Mapped[datetime] = mapped_column(DateTime)
     medical_record_id: Mapped[int] = mapped_column(ForeignKey("medical_record.id"))
-    medical_record: Mapped["MedicalRecordModel"] = relationship()
+    medical_record: Mapped["MedicalRecordModel"] = relationship(back_populates="consultations")
 
     def __repr__(self) -> str:
         return f"<Consultation(id={self.id}, chief_complaint={self.chief_complaint}, diagnosis={self.diagnosis})>"

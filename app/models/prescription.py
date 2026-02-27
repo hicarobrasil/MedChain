@@ -1,3 +1,4 @@
+from typing import List
 from sqlalchemy import (
     DateTime,
     ForeignKey,
@@ -20,4 +21,5 @@ class PrescriptionModel(Base):
     )
     
     consultation_id = Mapped[int] = mapped_column(ForeignKey("consultations.id"))
-    consultation: Mapped["ConsultationModel"] = relationship(back_populates="prescriptions")
+    consultation: Mapped["ConsultationModel"] = relationship(back_populates="prescription")
+    items: Mapped[List["PrescriptionItemModel"]] = relationship(back_populates="prescription")

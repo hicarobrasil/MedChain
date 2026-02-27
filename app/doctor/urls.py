@@ -1,7 +1,6 @@
 from fastapi import APIRouter
-from typing import List
 from app.doctor.views import DoctorView
-from app.doctor.schemas import DoctorOut, DoctorIn
+from app.doctor.schemas import DoctorOut
 
 router = APIRouter(tags=["Médico"])
 

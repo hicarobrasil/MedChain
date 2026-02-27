@@ -4,7 +4,7 @@ from sqlalchemy import (
     String,
     ForeignKey,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
 class FileModel(Base):

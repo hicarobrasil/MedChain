@@ -24,7 +24,7 @@ class DiagnosticModel(Base):
 
     medical_record_id: Mapped[int] = mapped_column(ForeignKey("medical_record.id"))
     medical_record: Mapped["MedicalRecordModel"] = relationship(
-        "MedicalRecordModel", back_populates="diagnostics"
+        "MedicalRecordModel", back_populates="diagnostic"
     )
 
     def __repr__(self):

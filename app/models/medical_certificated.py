@@ -18,7 +18,7 @@ class MedicalCertificatedModel(Base):
     created_date: Mapped[datetime] = mapped_column(DateTime)
     updated_date: Mapped[datetime] = mapped_column(DateTime)
     medical_record_id: Mapped[int] = mapped_column(ForeignKey("medical_record.id"))
-    medical_record: Mapped["MedicalRecordModel"] = relationship(back_populates="certificates")
+    medical_record: Mapped["MedicalRecordModel"] = relationship(back_populates="certificate")
 
     def __repr__(self) -> str:
         return f"<MedicalCertificated(id={self.id}, purpose={self.purpose}, period_of_leave={self.period_of_leave})>"

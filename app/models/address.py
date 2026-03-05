@@ -1,4 +1,4 @@
-from uuid import UUID
+import uuid
 from app.database import Base
 from sqlalchemy import (
     Integer,
@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 
@@ -14,7 +15,9 @@ class AddressModel(Base):
     __tablename__ = "address"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    public_id: Mapped[str] = mapped_column(UUID, unique=True, index=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), unique=True, index=True, default=uuid.uuid4
+    )
     street: Mapped[str] = mapped_column(String)
     number: Mapped[str] = mapped_column(String)
     complement: Mapped[str | None] = mapped_column(String, nullable=True)

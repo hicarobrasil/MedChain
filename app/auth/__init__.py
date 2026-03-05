@@ -3,13 +3,11 @@ from collections import UserDict
 from enum import Enum
 from typing import Union
 
+from jwt import ExpiredSignatureError, InvalidTokenError
+
 from app.auth.service import SessionDataSource
 from fastapi import Depends, HTTPException
 from fastapi.security import APIKeyHeader
-from sentry_sdk import set_user
-
-from app.auth.datasources import SessionDataSource
-from app.exceptions import APIException
 
 api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
@@ -96,7 +94,6 @@ async def get_user(acess_token: str = Depends(api_key_header)) -> User:
     try:
         session_data = SessionDataSource().get_token(acess_token)
         email = session_data["email"]
-        set_user({"email": email})
         return AuthenticatedUser(email, session_data, token_acesso=acess_token)
-    except APIException:
+    except (ExpiredSignatureError, InvalidTokenError, KeyError, ValueError):
         raise HTTPException(status_code=401, detail="Não autenticado.")

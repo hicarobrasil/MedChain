@@ -8,6 +8,7 @@ from app.database import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
 
     uid = Column(PG_UUID(as_uuid=True), nullable=False, primary_key=True, default=uuid.uuid4)
     username = Column(String(50), index=True, nullable=False)

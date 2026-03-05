@@ -12,7 +12,7 @@ class ConsultationModel(Base):
 
     __tablename__ = "consultations"
 
-    id = Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     chief_complaint: Mapped[str] = mapped_column(String, nullable=False)
     history_of_present_illness: Mapped[str] = mapped_column(String, nullable=False)
     diagnosis: Mapped[str] = mapped_column(String, nullable=False)

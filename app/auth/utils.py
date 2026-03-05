@@ -1,7 +1,7 @@
 import jwt
 
 from passlib.hash import pbkdf2_sha256
-from settings import settings
+from app.settings import settings
 
 
 
@@ -13,6 +13,9 @@ def check_password(hash, password):
 def make_password(password):
     """Gera uma senha a partir de um algoritmo de hash."""
     return pbkdf2_sha256.hash(password)
+
+
+generate_passwd_hash = make_password  # alias para compatibilidade
 
 
 def get_session_name(session_key):

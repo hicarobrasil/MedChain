@@ -3,6 +3,7 @@ from sqlalchemy import (
     String,
     DateTime,
     ForeignKey,
+    Enum as SQLEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 from datetime import datetime, timezone
@@ -27,7 +28,7 @@ class DoctorModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     CRM: Mapped[str] = mapped_column(String(20), unique=True)
-    specialty: Mapped[SpecialtyEnum] = mapped_column(Enum(SpecialtyEnum))
+    specialty: Mapped[SpecialtyEnum] = mapped_column(SQLEnum(SpecialtyEnum))
     created_date: Mapped[datetime | None] = mapped_column(
         DateTime, default=datetime.now(timezone.utc)
     )

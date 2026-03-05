@@ -1,5 +1,4 @@
-from .routes import doctor_router
-from .service import DoctorService
-from .schemas import DoctorCreate, DoctorUpdate, DoctorOut
+from .urls import router as doctor_router
+from .schemas import DoctorIn, DoctorUpdate, DoctorOut
 
-__all__ = ["doctor_router", "DoctorService", "DoctorCreate", "DoctorUpdate", "DoctorOut"]
+__all__ = ["doctor_router", "DoctorIn", "DoctorUpdate", "DoctorOut"]

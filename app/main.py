@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from doctor.urls import router as doctor_router
-from medical_record.urls import router as medical_records_router
-from patient.urls import router as pacient_records_router
-from file.urls import router as file_router
+from app.doctor.urls import router as doctor_router
+from app.medical_record.urls import router as medical_records_router
+from app.patient.urls import router as pacient_records_router
+from app.file.urls import router as file_router
 from app.database import init_db
 
 # Initialize the database

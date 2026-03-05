@@ -230,4 +230,4 @@ class PatientView:
             db.commit()
             db.refresh(patient.user)
 
-    return {"status": 200, "message": "Paciente atualizado com sucesso"}
+        return {"status": 200, "message": "Paciente atualizado com sucesso"}

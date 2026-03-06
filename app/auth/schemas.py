@@ -45,3 +45,11 @@ class DoctorRegisterModel(BaseModel):
     password: str = Field(min_length=6)
     CRM: str
     specialty: str
+
+
+class DoctorCompleteModel(BaseModel):
+    """Completa cadastro de médico quando auth_users já existe mas users/doctor não."""
+    email: EmailStr
+    full_name: str
+    CRM: str
+    specialty: str

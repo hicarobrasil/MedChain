@@ -14,6 +14,7 @@ from app.auth.schemas import (
     UserCreateModel,
     UserLoginModel,
     DoctorRegisterModel,
+    DoctorCompleteModel,
     PasswordResetRequestModel,
     PasswordResetConfirmModel,
     TokenResponse,
@@ -29,6 +30,7 @@ from app.errors import (
 )
 from fastapi import BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime, timedelta
 import logging
 from app.auth.dependencies import AccessTokenBearer, RefreshTokenBearer, get_current_user
@@ -36,6 +38,7 @@ from app.auth.utils import make_password
 from app.models.user import UserModel, StatusEnum
 from app.models.doctor import DoctorModel
 from app.models.doctor import SpecialtyEnum as DoctorSpecialtyEnum
+from app.models.patient import PatientModel
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 user_service = UserService()
@@ -44,6 +47,29 @@ redis_client = RedisClient()
 
 admin_role = RoleChecker(["admin"])
 user_or_admin_role = RoleChecker(["admin", "user"])
+
+SPECIALTY_MAP = {
+    "clínica geral": "GENERAL",
+    "clinica geral": "GENERAL",
+    "cardiologia": "CARDIOLOGY",
+    "dermatologia": "DERMATOLOGY",
+    "neurologia": "NEUROLOGY",
+    "pediatria": "PEDIATRICS",
+    "psiquiatria": "PSYCHIATRY",
+    "ortopedia": "ORTHOPEDICS",
+}
+
+
+def _resolve_specialty(specialty_str: str) -> DoctorSpecialtyEnum:
+    """Converte string de especialidade para enum, com fallback para OTHER."""
+    s = (specialty_str or "").strip()
+    key = s.lower()
+    value = SPECIALTY_MAP.get(key) or s.upper().replace(" ", "_").replace("Í", "I") or "OTHER"
+    try:
+        return DoctorSpecialtyEnum(value)
+    except ValueError:
+        return DoctorSpecialtyEnum.OTHER
+
 
 def send_verification_email(email: str, username: str, token: str):
     """Funcao para enviar email de verificacao"""
@@ -99,46 +125,40 @@ def register_doctor(
     db: Session = Depends(get_db),
 ):
     """Cadastro de medico: cria auth_users (login) + users/doctor (dados do app)."""
-    if user_service.user_exists(data.email, db):
-        raise UserAlreadyExists()
-    auth_user = user_service.create_user(
-        UserCreateModel(username=data.email, email=data.email, password=data.password),
-        db,
-    )
-    user_service.update_user(auth_user, {"role": "doctor", "is_verified": True}, db)
-    app_user = UserModel(
-        full_name=data.full_name,
-        email=data.email,
-        password=make_password(data.password),
-        status=StatusEnum.ACTIVE,
-    )
-    db.add(app_user)
-    db.commit()
-    db.refresh(app_user)
-    spec_map = {
-        "clínica geral": "GENERAL",
-        "clinica geral": "GENERAL",
-        "cardiologia": "CARDIOLOGY",
-        "dermatologia": "DERMATOLOGY",
-        "neurologia": "NEUROLOGY",
-        "pediatria": "PEDIATRICS",
-        "psiquiatria": "PSYCHIATRY",
-        "ortopedia": "ORTHOPEDICS",
-    }
-    spec_key = data.specialty.strip().lower()
-    spec_value = spec_map.get(spec_key) or data.specialty.upper().replace(" ", "_").replace("Í", "I")
     try:
-        specialty = DoctorSpecialtyEnum(spec_value)
-    except ValueError:
-        specialty = DoctorSpecialtyEnum.OTHER
-    doctor = DoctorModel(
-        CRM=data.CRM,
-        specialty=specialty,
-        user_id=app_user.id,
-    )
-    db.add(doctor)
-    db.commit()
-    db.refresh(doctor)
+        if user_service.user_exists(data.email, db):
+            raise UserAlreadyExists()
+        auth_user = user_service.create_user(
+            UserCreateModel(username=data.email, email=data.email, password=data.password),
+            db,
+        )
+        user_service.update_user(auth_user, {"role": "doctor", "is_verified": True}, db)
+        app_user = UserModel(
+            full_name=data.full_name,
+            email=data.email,
+            password=make_password(data.password),
+            status=StatusEnum.ACTIVE,
+        )
+        db.add(app_user)
+        db.commit()
+        db.refresh(app_user)
+        specialty = _resolve_specialty(data.specialty)
+        doctor = DoctorModel(
+            CRM=data.CRM,
+            specialty=specialty,
+            user_id=app_user.id,
+        )
+        db.add(doctor)
+        db.commit()
+        db.refresh(doctor)
+    except UserAlreadyExists:
+        raise
+    except Exception as e:
+        logging.exception("Erro ao cadastrar médico")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao cadastrar: {str(e)}. Verifique se o banco de dados está rodando.",
+        )
     access_token = create_access_token(
         user_data={
             "email": auth_user.email,
@@ -209,6 +229,94 @@ def verify_account_manual(email: str, db: Session = Depends(get_db)):
     
     return {"message": "Conta verificada com sucesso"}
 
+
+@auth_router.get("/fix-doctor-roles", status_code=status.HTTP_200_OK)
+def fix_doctor_roles(db: Session = Depends(get_db)):
+    """
+    Corrige role em auth_users: define role='doctor' para emails que têm DoctorModel.
+    Chame: GET /api/v1/auth/fix-doctor-roles
+    """
+    updated = []
+    for doctor in db.query(DoctorModel).join(UserModel, DoctorModel.user_id == UserModel.id).all():
+        email = doctor.user.email
+        auth_user = user_service.get_user_by_email(email, db)
+        if auth_user and (auth_user.role or "").lower() != "doctor":
+            user_service.update_user(auth_user, {"role": "doctor"}, db)
+            updated.append(email)
+    return {"message": "Concluído", "updated": updated, "count": len(updated)}
+
+
+@auth_router.post("/complete-doctor", status_code=status.HTTP_200_OK)
+def complete_doctor_registration(data: DoctorCompleteModel, db: Session = Depends(get_db)):
+    """
+    Completa cadastro de médico quando o usuário já existe em auth_users mas não tem UserModel/DoctorModel.
+    Cria users + doctor e atualiza auth_users.role para 'doctor'.
+    POST /api/v1/auth/complete-doctor com body: {"email":"...","full_name":"...","CRM":"...","specialty":"..."}
+    """
+    auth_user = user_service.get_user_by_email(data.email, db)
+    if not auth_user:
+        raise UserNotFound()
+    app_user = db.query(UserModel).filter(func.lower(UserModel.email) == data.email.lower()).first()
+    if app_user:
+        doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first()
+        if doctor:
+            raise HTTPException(status_code=400, detail="Este email já está cadastrado como médico.")
+        raise HTTPException(status_code=400, detail="Este email já existe como paciente. Use outro email.")
+    # Criar UserModel e DoctorModel
+    app_user = UserModel(
+        full_name=data.full_name,
+        email=data.email,
+        password=make_password("temp"),  # não usado para login
+        status=StatusEnum.ACTIVE,
+    )
+    db.add(app_user)
+    db.commit()
+    db.refresh(app_user)
+    specialty = _resolve_specialty(data.specialty)
+    doctor = DoctorModel(CRM=data.CRM, specialty=specialty, user_id=app_user.id)
+    db.add(doctor)
+    db.commit()
+    user_service.update_user(auth_user, {"role": "doctor", "is_verified": True}, db)
+    return {"message": "Cadastro de médico concluído. Faça login novamente.", "email": data.email}
+
+
+@auth_router.get("/check-role", status_code=status.HTTP_200_OK)
+def check_user_role(email: str, db: Session = Depends(get_db)):
+    """
+    Diagnóstico: verifica auth_users, users, doctor para um email.
+    Chame: GET /api/v1/auth/check-role?email=dinizkaroline1@gmail.com
+    """
+    email = (email or "").strip()
+    email_lower = email.lower()
+    auth_user = user_service.get_user_by_email(email, db) or user_service.get_user_by_email(email_lower, db)
+    app_user = db.query(UserModel).filter(func.lower(UserModel.email) == email_lower).first()
+    doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first() if app_user else None
+    patient = db.query(PatientModel).filter(PatientModel.user_id == app_user.id).first() if app_user else None
+    resolved = _resolve_user_role(email_lower, (auth_user.role or "") if auth_user else "", db)
+    return {
+        "email": email_lower,
+        "auth_users": {"exists": auth_user is not None, "role": getattr(auth_user, "role", None) if auth_user else None},
+        "users": {"exists": app_user is not None},
+        "doctor": {"exists": doctor is not None},
+        "patient": {"exists": patient is not None},
+        "resolved_role": resolved,
+    }
+
+
+def _resolve_user_role(email: str, auth_role: str, db: Session) -> str:
+    """Deriva o role real: se auth_role já é doctor, ou se o email pertence a um médico (users+doctor), retorna 'doctor'."""
+    if auth_role and str(auth_role).lower() == "doctor":
+        return "doctor"
+    email_lower = (email or "").strip().lower()
+    if not email_lower:
+        return auth_role if auth_role in ("doctor", "patient", "admin") else "patient"
+    app_user = db.query(UserModel).filter(func.lower(UserModel.email) == email_lower).first()
+    if not app_user:
+        return auth_role if auth_role in ("doctor", "patient", "admin") else "patient"
+    doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first()
+    return "doctor" if doctor else (auth_role if auth_role in ("doctor", "patient", "admin") else "patient")
+
+
 @auth_router.post("/login", response_model=TokenResponse)
 def login_user(
     login_data: UserLoginModel, 
@@ -225,12 +333,22 @@ def login_user(
 
     if not verify_password(password, user.password_hash):
         raise InvalidCredentials()
+
+    role = _resolve_user_role(email, user.role or "", db)
+    public_id = None
+    if role == "doctor":
+        email_lower = (email or "").strip().lower()
+        app_user = db.query(UserModel).filter(func.lower(UserModel.email) == email_lower).first()
+        if app_user:
+            doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first()
+            if doctor:
+                public_id = str(doctor.public_id)
         
     access_token = create_access_token(
         user_data={
             "email": user.email,
             "user_uid": str(user.uid),
-            "role": user.role,
+            "role": role,
         }
     )
 
@@ -243,17 +361,22 @@ def login_user(
         expiry_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,  # converter dias para segundos
     )
 
+    user_payload = {
+        "uid": str(user.uid),
+        "email": user.email,
+        "username": user.username,
+        "is_verified": user.is_verified,
+        "role": role,
+    }
+    if public_id:
+        user_payload["id"] = public_id
+        user_payload["public_id"] = public_id
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "user": {
-            "uid": str(user.uid),
-            "email": user.email,
-            "username": user.username,
-            "is_verified": user.is_verified,
-            "role": user.role,
-        }
+        "user": user_payload,
     }
 
 @auth_router.post("/refresh-token", response_model=dict)

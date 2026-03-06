@@ -34,13 +34,19 @@ engine = create_engine(
     pool_recycle=1800,
 )
 
-# Cria o SessionLocal
-Session = sessionmaker(engine)
+# Cria o SessionLocal (autobegin: cada operação inicia transação se necessário)
+Session = sessionmaker(engine, autobegin=True)
 
 
 def get_session() -> Generator[SQLAlchemySession, None, None]:
-    with Session.begin() as session:
+    session = Session()
+    try:
         yield session
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 get_db = get_session  # alias para compatibilidade

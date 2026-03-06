@@ -24,7 +24,7 @@ class DoctorView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado",
+                detail="Usuario nao autenticado",
             )
 
         if user.role not in [UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT]:
@@ -80,7 +80,7 @@ class DoctorView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado",
+                detail="Usuario nao autenticado",
             )
         if user.role not in [UserRole.ADMIN, UserRole.DOCTOR]:
             raise HTTPException(
@@ -94,7 +94,7 @@ class DoctorView:
         if not doctor:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Médico não encontrado",
+                detail="Medico nao encontrado",
             )
 
         doctor.CRM = doctor_data.CRM

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script para testar as funções de hash de senha
+Script para testar as funcoes de hash de senha
 """
 
 import sys
@@ -12,9 +12,9 @@ from app.auth.utils import generate_passwd_hash, verify_password
 
 
 def test_password_functions():
-    """Testa as funções de hash e verificação de senha"""
+    """Testa as funcoes de hash e verificacao de senha"""
 
-    print("🔧 Testando funções de senha...")
+    print("🔧 Testando funcoes de senha...")
 
     test_password = "minha_senha_secreta_123"
 

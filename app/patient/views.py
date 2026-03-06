@@ -26,7 +26,7 @@ class PatientView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado",
+                detail="Usuario nao autenticado",
             )
 
         if user.role not in [UserRole.ADMIN, UserRole.DOCTOR]:
@@ -80,7 +80,7 @@ class PatientView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado",
+                detail="Usuario nao autenticado",
             )
 
         if user.role not in [UserRole.ADMIN, UserRole.DOCTOR]:
@@ -102,7 +102,7 @@ class PatientView:
 
         if not patient:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Paciente não encontrado"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Paciente nao encontrado"
             )
         return {
             "uid": patient.user.public_id,
@@ -133,7 +133,7 @@ class PatientView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado",
+                detail="Usuario nao autenticado",
             )
 
         if user.role not in [UserRole.ADMIN, UserRole.DOCTOR]:
@@ -173,7 +173,7 @@ class PatientView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado",
+                detail="Usuario nao autenticado",
             )
 
         if user.role not in [UserRole.ADMIN, UserRole.DOCTOR]:
@@ -191,7 +191,7 @@ class PatientView:
 
         if not patient:
             raise HTTPException(
-                "Paciente não encontrado", status_code=status.HTTP_404_NOT_FOUND
+                "Paciente nao encontrado", status_code=status.HTTP_404_NOT_FOUND
             )
 
         if name:

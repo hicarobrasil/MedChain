@@ -8,7 +8,7 @@ import json
 from uuid import uuid4
 
 def test_medical_record_endpoint():
-    """Testa o endpoint de criação de medical record"""
+    """Testa o endpoint de criacao de medical record"""
     
     print("🏥 Testando endpoint de medical records...")
     
@@ -30,7 +30,7 @@ def test_medical_record_endpoint():
         token = login_response.json().get("access_token")
         headers = {"Authorization": f"Bearer {token}"}
         
-        # Criar médico para usar no teste
+        # Criar medico para usar no teste
         doctor_data = {
             "name": "Dr. Teste Medical Record",
             "crm": f"CRM{int(uuid4().hex[:8], 16)}",
@@ -42,11 +42,11 @@ def test_medical_record_endpoint():
         
         doctor_response = requests.post(f"{BASE_URL}/doctors/", json=doctor_data, headers=headers)
         if doctor_response.status_code != 201:
-            print(f"❌ Erro ao criar médico: {doctor_response.text}")
+            print(f"❌ Erro ao criar medico: {doctor_response.text}")
             return False
             
         doctor_id = doctor_response.json()["uid"]
-        print(f"✅ Médico criado: {doctor_id}")
+        print(f"✅ Medico criado: {doctor_id}")
         
         # Dados do medical record
         medical_record_data = {
@@ -56,7 +56,7 @@ def test_medical_record_endpoint():
             "medications": '["Paracetamol", "Dipirona"]'
         }
         
-        # Testar criação de medical record
+        # Testar criacao de medical record
         print("\n📝 Criando medical record...")
         record_response = requests.post(
             f"{BASE_URL}/medical-records/", 

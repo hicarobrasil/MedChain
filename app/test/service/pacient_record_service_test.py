@@ -12,7 +12,7 @@ class TestPacientRecordService:
 
         # Dados simulados
         data = {
-            "name": "João da Silva",
+            "name": "Joao da Silva",
             "dateofbirth": "1990-01-01",
             "gender": 1,
             "email": "blabla@gmail.com",

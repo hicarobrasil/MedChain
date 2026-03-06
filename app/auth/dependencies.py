@@ -29,32 +29,32 @@ class TokenBearer(HTTPBearer):
             credentials = await super().__call__(request)
             
             if not credentials:
-                raise InvalidToken("Credenciais não fornecidas")
+                raise InvalidToken("Credenciais nao fornecidas")
 
             token = credentials.credentials
             
             if not token:
-                raise InvalidToken("Token não fornecido")
+                raise InvalidToken("Token nao fornecido")
             
             import logging
             if token.startswith('"') and token.endswith('"'):
                 logging.error(f"Token com aspas detectado: {token[:30]}...")
-                raise InvalidToken("Token contém aspas - remova as aspas do header Authorization")
+                raise InvalidToken("Token contem aspas - remova as aspas do header Authorization")
             
             if not token or token.count('.') != 2:
-                logging.error(f"Token com formato inválido: {token[:30]}...")
-                raise InvalidToken("Formato de token inválido")
+                logging.error(f"Token com formato invalido: {token[:30]}...")
+                raise InvalidToken("Formato de token invalido")
                 
             token_data = decode_token(token)
 
             if not token_data:
-                raise InvalidToken("Token inválido ou expirado")
+                raise InvalidToken("Token invalido ou expirado")
 
             jti = token_data.get("jti")
             if jti and redis_client.is_token_blacklisted(jti):
-                raise InvalidToken("Token revogado ou inválido")
+                raise InvalidToken("Token revogado ou invalido")
 
-            # Verificar se o usuário existe e está verificado
+            # Verificar se o usuario existe e esta verificado
             db = next(get_session())
             user_email = token_data.get("user", {}).get("email")
             if user_email:
@@ -73,11 +73,11 @@ class TokenBearer(HTTPBearer):
             raise
         except Exception as e:
             import logging
-            logging.error(f"Erro inesperado na autenticação: {str(e)}")
-            raise InvalidToken("Erro na validação do token")
+            logging.error(f"Erro inesperado na autenticacao: {str(e)}")
+            raise InvalidToken("Erro na validacao do token")
 
     def verify_token_data(self, token_data: dict) -> None:
-        raise NotImplementedError("Este método deve ser implementado nas classes filhas")
+        raise NotImplementedError("Este metodo deve ser implementado nas classes filhas")
 
 class AccessTokenBearer(TokenBearer):
     def verify_token_data(self, token_data: dict) -> None:
@@ -97,7 +97,7 @@ def get_current_user(
     user_service = UserService()
     
     if not token_details or not token_details.get("user") or not token_details["user"].get("email"):
-        raise InvalidToken("Token não contém informações válidas do usuário")
+        raise InvalidToken("Token nao contem informacoes validas do usuario")
         
     user_email = token_details["user"]["email"]
     

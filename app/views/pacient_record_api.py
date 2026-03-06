@@ -84,7 +84,7 @@ async def create_pacient(
 async def get_pacient(
     pacient_uid: uuid.UUID, 
     db: Session = Depends(get_db),
-    _: bool = Depends(verify_patient_access)  # Verifica se o usuário tem acesso ao paciente
+    _: bool = Depends(verify_patient_access)  # Verifica se o usuario tem acesso ao paciente
 ):
     service = PacientService(db)
     pacient = service.get_pacient_by_uid(pacient_uid)
@@ -116,7 +116,7 @@ async def update_pacient(
     try:
         dob = datetime.fromisoformat(dateofbirth)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de data inválido")
+        raise HTTPException(status_code=400, detail="Formato de data invalido")
 
     update_data = {
         "name": name,

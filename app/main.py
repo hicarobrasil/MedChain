@@ -1,3 +1,11 @@
+import os
+import sys
+
+# Forca UTF-8 no Windows ANTES de carregar o banco (evita UnicodeDecodeError no psycopg2)
+if sys.platform == "win32":
+    os.environ.setdefault("PGCLIENTENCODING", "UTF8")
+    os.environ.setdefault("PYTHONUTF8", "1")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,14 +23,14 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application"""
     app = FastAPI(
         title="MediVault API",
-        description="API para gerenciamento de registros médicos com verificação blockchain",
+        description="API para gerenciamento de registros medicos com verificacao blockchain",
         version="1.0.0",
     )
 
     # Configurar CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Em produção, especificar origens permitidas
+        allow_origins=["*"],  # Em producao, especificar origens permitidas
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

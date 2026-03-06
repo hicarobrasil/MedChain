@@ -32,7 +32,7 @@ class TestMedicalRecordService:
         mock_store_hash.return_value = "mocked_tx_id_456"
         mock_upload_file.return_value = ("https://mock-bucket.s3.amazonaws.com/test_file.txt", "mocked_file_hash_123")
         
-        # Obter uma sessão do banco de dados
+        # Obter uma sessao do banco de dados
         db = next(get_db())
         
         # Simular dados de entrada
@@ -46,20 +46,20 @@ class TestMedicalRecordService:
         # Caminho para o arquivo de teste
         test_file_path = "arquivo_exemplo.txt"
         
-        # Criar o arquivo de teste se não existir
+        # Criar o arquivo de teste se nao existir
         if not os.path.exists(test_file_path):
             with open(test_file_path, "w") as f:
-                f.write("Conteúdo de teste para o arquivo exemplo")
+                f.write("Conteudo de teste para o arquivo exemplo")
         
         # Simular um arquivo usando MockUploadFile
         with MockUploadFile(test_file_path) as mock_file:
-            # Criar uma instância do serviço
+            # Criar uma instância do servico
             service = MedicalRecordService(db)
             
-            # Chamar o método de criação
+            # Chamar o metodo de criacao
             record = service.create_medical_record(data, mock_file)
             
-            # Verificações
+            # Verificacoes
             assert record is not None
             assert record.patient_id == data["patient_id"]
             assert record.doctor_id == data["doctor_id"]

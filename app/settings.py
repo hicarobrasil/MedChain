@@ -10,14 +10,14 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     DEBUG: bool = True
 
-    # Autenticação
+    # Autenticacao
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutos
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ACCESS_TOKEN_EXPIRE_SECONDS: int = 3600  # 1 hora
 
-    # Domínio
+    # Dominio
     DOMAIN: str = "localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
 

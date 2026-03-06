@@ -32,11 +32,11 @@ class User(metaclass=ABCMeta):
 
 
 class AuthenticatedUser(User):
-    """Usuário autenticado a partir de uma sessão salva.
+    """Usuario autenticado a partir de uma sessao salva.
 
     Attributes:
-        email (obj): Email do usuário (identificador da sessão).
-        session (obj): Dicionário de dados da sessão.
+        email (obj): Email do usuario (identificador da sessao).
+        session (obj): Dicionario de dados da sessao.
     """
 
     def __init__(self, email, session=None, token_acesso=None):
@@ -65,7 +65,7 @@ class AuthenticatedUser(User):
 
 
 class AnonymousUser(User):
-    """Usuário anônimo."""
+    """Usuario anônimo."""
 
     @property
     def is_authenticated(self):
@@ -77,23 +77,23 @@ class AnonymousUser(User):
 
 
 async def get_user(acess_token: str = Depends(api_key_header)) -> User:
-    """Busca o usuário autenticado.
+    """Busca o usuario autenticado.
 
     Utiliza o protocolo "Bearer Token" e um token de acesso especificado
-    no header `Authorization` para processar os dados de autenticação.
+    no header `Authorization` para processar os dados de autenticacao.
     """
 
     if acess_token:
         acess_token = acess_token.split("Bearer ")[-1]
     else:
-        raise HTTPException(status_code=401, detail="Não autenticado.")
+        raise HTTPException(status_code=401, detail="Nao autenticado.")
 
     if isinstance(acess_token, type(None)) or not acess_token:
-        raise HTTPException(status_code=401, detail="Não autenticado.")
+        raise HTTPException(status_code=401, detail="Nao autenticado.")
 
     try:
         session_data = SessionDataSource().get_token(acess_token)
         email = session_data["email"]
         return AuthenticatedUser(email, session_data, token_acesso=acess_token)
     except (ExpiredSignatureError, InvalidTokenError, KeyError, ValueError):
-        raise HTTPException(status_code=401, detail="Não autenticado.")
+        raise HTTPException(status_code=401, detail="Nao autenticado.")

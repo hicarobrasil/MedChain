@@ -33,7 +33,7 @@ class MedicalRecordsView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado.",
+                detail="Usuario nao autenticado.",
             )
 
         if user.role not in {
@@ -106,7 +106,7 @@ class MedicalRecordsView:
                 }
 
         except Exception as e:
-            logger.error(f"Erro ao listar prontuários: {str(e)}")
+            logger.error(f"Erro ao listar prontuarios: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Erro interno do servidor.",
@@ -185,7 +185,7 @@ class MedicalRecordsView:
                         )
                     await db.commit()
 
-                    # Atualiza o objeto consultation para incluir a relação recém-criada
+                    # Atualiza o objeto consultation para incluir a relacao recem-criada
                     # Isso garante que o retorno da API inclua a receita
                     await db.refresh(consultation)
 
@@ -225,10 +225,10 @@ class MedicalRecordsView:
                 }
 
             except Exception as e:
-                logger.error(f"Erro ao criar diagnóstico: {str(e)}")
+                logger.error(f"Erro ao criar diagnostico: {str(e)}")
                 raise HTTPException(
                     status_code=status.HTTP_400,
-                    detail="Erro ao criar diagnóstico.",
+                    detail="Erro ao criar diagnostico.",
                 )
 
         elif type == MedicalRecordTypes.MEDICAL_CERTIFICATE:
@@ -249,15 +249,15 @@ class MedicalRecordsView:
                 }
 
             except Exception as e:
-                logger.error(f"Erro ao criar certificado médico: {str(e)}")
+                logger.error(f"Erro ao criar certificado medico: {str(e)}")
                 raise HTTPException(
                     status_code=status.HTTP_400,
-                    detail="Erro ao criar certificado médico.",
+                    detail="Erro ao criar certificado medico.",
                 )
 
-        # --- Integração com Blockchain ---
+        # --- Integracao com Blockchain ---
         try:
-            # 1. Preparar dados para hash (Metadados + Dados Específicos)
+            # 1. Preparar dados para hash (Metadados + Dados Especificos)
             payload_to_hash = {
                 "record_id": str(medical_record.id),
                 "patient_id": str(medical_record.patient_id),
@@ -285,7 +285,7 @@ class MedicalRecordsView:
 
         except Exception as e:
             logger.error(f"Erro ao registrar na blockchain: {str(e)}")
-            # Não interrompe o fluxo principal, mas loga o erro (ou poderia lançar exceção dependendo da regra de negócio)
+            # Nao interrompe o fluxo principal, mas loga o erro (ou poderia lancar excecao dependendo da regra de negocio)
 
         if type == MedicalRecordTypes.CONSULTATION:
             return consultation
@@ -305,7 +305,7 @@ class MedicalRecordsView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado.",
+                detail="Usuario nao autenticado.",
             )
 
         if user.role not in {
@@ -338,13 +338,13 @@ class MedicalRecordsView:
             if not medical_record:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Prontuário não encontrado.",
+                    detail="Prontuario nao encontrado.",
                 )
 
             return medical_record
 
         except Exception as e:
-            logger.error(f"Erro ao buscar prontuário por ID: {str(e)}")
+            logger.error(f"Erro ao buscar prontuario por ID: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Erro interno do servidor.",
@@ -359,7 +359,7 @@ class MedicalRecordsView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado.",
+                detail="Usuario nao autenticado.",
             )
 
         if user.role not in {
@@ -393,7 +393,7 @@ class MedicalRecordsView:
 
         except Exception as e:
             logger.error(
-                f"Erro ao buscar prontuários por nome de usuário do paciente: {str(e)}"
+                f"Erro ao buscar prontuarios por nome de usuario do paciente: {str(e)}"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -21,15 +21,15 @@ class SolanaHashStorage:
 
         self.wallet_file = wallet_file
         self.keypair = self._load_or_create_keypair()
-        print(f"Chave pública: {str(self.keypair.public_key)}")
+        print(f"Chave publica: {str(self.keypair.public_key)}")
 
     def _load_or_create_keypair(self) -> Keypair:
         """
-        Carrega um keypair existente do arquivo JSON ou cria um novo se não existir.
+        Carrega um keypair existente do arquivo JSON ou cria um novo se nao existir.
         """
         if os.path.exists(self.wallet_file):
             try:
-                # Usar o método nativo from_file da classe Keypair
+                # Usar o metodo nativo from_file da classe Keypair
                 keypair = Keypair.from_file(self.wallet_file)
                 print(f"Carregando wallet existente: {str(keypair.public_key)}")
                 return keypair
@@ -37,14 +37,14 @@ class SolanaHashStorage:
                 print(f"Erro ao carregar wallet: {e}")
                 print("Criando nova wallet...")
         
-        # Criar nova keypair se não existe ou houve erro
+        # Criar nova keypair se nao existe ou houve erro
         keypair = Keypair()
         
         # Converter a chave privada para uma lista de inteiros para salvar no arquivo
         private_key_bytes = keypair.key_pair.encode()
         private_key_list = [b for b in private_key_bytes]
         
-        # Salvar no formato esperado pelo método from_file
+        # Salvar no formato esperado pelo metodo from_file
         with open(self.wallet_file, 'w') as f:
             json.dump(private_key_list, f)
         
@@ -54,7 +54,7 @@ class SolanaHashStorage:
 
     def get_balance(self) -> float:
         """
-        Obtém o saldo atual da wallet em SOL.
+        Obtem o saldo atual da wallet em SOL.
         
         Returns:
             float: Saldo em SOL
@@ -71,7 +71,7 @@ class SolanaHashStorage:
         Solicita um airdrop para a conta do par de chaves na devnet.
         
         Args:
-            amount: Quantidade de SOL a receber (padrão: 1.0)
+            amount: Quantidade de SOL a receber (padrao: 1.0)
             
         Returns:
             Resposta do airdrop
@@ -81,7 +81,7 @@ class SolanaHashStorage:
 
     def generate_file_id(self) -> str:
         """
-        Gera um ID único para um arquivo.
+        Gera um ID unico para um arquivo.
         
         Returns:
             str: UUID como string
@@ -90,10 +90,10 @@ class SolanaHashStorage:
 
     def hash_file(self, data: bytes) -> str:
         """
-        Gera um hash SHA-256 a partir do conteúdo do arquivo.
+        Gera um hash SHA-256 a partir do conteudo do arquivo.
         
         Args:
-            data: Conteúdo do arquivo em bytes
+            data: Conteudo do arquivo em bytes
             
         Returns:
             str: Hash SHA-256 em formato hexadecimal
@@ -102,10 +102,10 @@ class SolanaHashStorage:
 
     def extract_blockhash(self, response):
         """
-        Extrai o blockhash da resposta do nó Solana.
+        Extrai o blockhash da resposta do no Solana.
         
         Args:
-            response: Resposta do método get_latest_blockhash
+            response: Resposta do metodo get_latest_blockhash
             
         Returns:
             str: Blockhash
@@ -121,8 +121,8 @@ class SolanaHashStorage:
             return response.to_string()
         else:
             print(f"Formato do blockhash recebido: {type(response)}")
-            print(f"Conteúdo: {response}")
-            raise Exception("Não foi possível extrair o blockhash da resposta")
+            print(f"Conteudo: {response}")
+            raise Exception("Nao foi possivel extrair o blockhash da resposta")
 
     def store_file_hash(
         self,
@@ -135,20 +135,20 @@ class SolanaHashStorage:
         Armazena o hash do arquivo na blockchain Solana.
         
         Args:
-            file_id: ID único do arquivo
+            file_id: ID unico do arquivo
             file_hash: Hash SHA-256 do arquivo
-            recipient: Endereço do destinatário (opcional)
-            amount_sol: Quantidade de SOL a transferir (padrão: 0.0)
+            recipient: Endereco do destinatario (opcional)
+            amount_sol: Quantidade de SOL a transferir (padrao: 0.0)
             
         Returns:
-            str: ID da transação
+            str: ID da transacao
         """
         try:
             to_pubkey = PublicKey(recipient) if recipient else self.keypair.public_key
             instructions = []
 
             if amount_sol > 0:
-                # Se houver um valor em SOL, cria uma instrução de transferência
+                # Se houver um valor em SOL, cria uma instrucao de transferência
                 lamports = sol_to_lamport(amount_sol)
                 transfer_ix = transfer(
                     from_public_key=self.keypair.public_key,
@@ -157,7 +157,7 @@ class SolanaHashStorage:
                 )
                 instructions.append(transfer_ix)
 
-            # Instrução de memo para armazenar o hash do arquivo
+            # Instrucao de memo para armazenar o hash do arquivo
             memo_program_id = PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
             memo_text = f"MEDIVAULT:FILE:{file_id}:{file_hash}"
 
@@ -168,7 +168,7 @@ class SolanaHashStorage:
             )
             instructions.append(memo_instruction)
 
-            # Criar e assinar transação
+            # Criar e assinar transacao
             transaction = Transaction(instructions=instructions, signers=[self.keypair])
 
             recent_blockhash_response = self.client.get_latest_blockhash()
@@ -176,7 +176,7 @@ class SolanaHashStorage:
             transaction.recent_blockhash = recent_blockhash
             print(f"Blockhash: {recent_blockhash}")
 
-            print(f"Enviando transação com memo: {memo_text}")
+            print(f"Enviando transacao com memo: {memo_text}")
             result = self.client.send_transaction(transaction)
 
             if isinstance(result, str) and len(result) > 40:
@@ -186,11 +186,11 @@ class SolanaHashStorage:
             elif hasattr(result, 'tx_id'):
                 return result.tx_id
             else:
-                print(f"Erro na resposta da transação: {result}")
+                print(f"Erro na resposta da transacao: {result}")
                 return None
 
         except Exception as e:
-            print(f"Erro ao enviar transação: {e}")
+            print(f"Erro ao enviar transacao: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -200,12 +200,12 @@ class SolanaHashStorage:
         Verifica se o hash do arquivo corresponde ao registrado na blockchain.
 
         Args:   
-            file_id: ID único do arquivo
-            file_data: Conteúdo do arquivo em bytes
-            transaction_id: ID da transação na blockchain
+            file_id: ID unico do arquivo
+            file_data: Conteudo do arquivo em bytes
+            transaction_id: ID da transacao na blockchain
 
         returns:
-            bool: True se o hash do arquivo corresponder ao registrado, False caso contrário
+            bool: True se o hash do arquivo corresponder ao registrado, False caso contrario
         """
         try:
 
@@ -229,7 +229,7 @@ class SolanaHashStorage:
             if "result" not in data or not data["result"]:
                 return False
                 
-            # Converter para string e verificar se contém o memo
+            # Converter para string e verificar se contem o memo
             tx_json = json.dumps(data)
            
             if memo_text in tx_json:

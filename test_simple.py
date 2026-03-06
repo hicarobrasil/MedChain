@@ -7,7 +7,7 @@ import requests
 import json
 
 def test_simple():
-    """Teste básico de endpoints"""
+    """Teste basico de endpoints"""
     
     BASE_URL = "http://127.0.0.1:8000/api/v1"
     
@@ -31,7 +31,7 @@ def test_simple():
             print(f"Profile status: {profile_response.status_code}")
             
             if profile_response.status_code == 200:
-                print("✅ Autenticação funcionando")
+                print("✅ Autenticacao funcionando")
                 return True
             
         print(f"❌ Erro: {response.text}")

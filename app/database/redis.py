@@ -4,21 +4,21 @@ from app.settings import Settings
 
 class RedisClient:
     
-    """Cliente Redis para gerenciar a blacklist de tokens JWT (versão síncrona)"""
+    """Cliente Redis para gerenciar a blacklist de tokens JWT (versao sincrona)"""
 
     def __init__(self, redis_url: str = None):
         """
         Inicializa o cliente Redis.
         
         Args:
-            redis_url: URL de conexão do Redis. Se não fornecido, usa a configuração padrão.
+            redis_url: URL de conexao do Redis. Se nao fornecido, usa a configuracao padrao.
         """
         settings = Settings()
         self.redis_url = redis_url or settings.REDIS_URL
         self._redis = None
 
     def _get_connection(self):
-        """Obtém uma conexão Redis ou reutiliza a existente"""
+        """Obtem uma conexao Redis ou reutiliza a existente"""
         if self._redis is None:
             try:
                 self._redis = redis.from_url(self.redis_url, decode_responses=True)
@@ -30,7 +30,7 @@ class RedisClient:
     def add_token_to_blacklist(self, jti: str, ttl: int) -> bool:
         redis_conn = self._get_connection()
         if not redis_conn:
-            logging.error("Não foi possível adicionar token à blacklist: sem conexão Redis")
+            logging.error("Nao foi possivel adicionar token à blacklist: sem conexao Redis")
             return False
         try:
             key = f"token:blacklist:{jti}"
@@ -43,7 +43,7 @@ class RedisClient:
     def is_token_blacklisted(self, jti: str) -> bool:
         redis_conn = self._get_connection()
         if not redis_conn:
-            logging.warning("Não foi possível verificar blacklist: sem conexão Redis")
+            logging.warning("Nao foi possivel verificar blacklist: sem conexao Redis")
             return False
         try:
             key = f"token:blacklist:{jti}"

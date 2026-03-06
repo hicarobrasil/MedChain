@@ -17,14 +17,14 @@ async def verify_record_access(
     token_data: dict = Depends(token_auth),
     db: Session = Depends(get_db)
 ) -> bool:
-    """Verifica se o usuário tem acesso ao registro médico."""
+    """Verifica se o usuario tem acesso ao registro medico."""
     service = MedicalRecordService(db)
     record = service.get_medical_record(record_id)
     
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Registro médico não encontrado"
+            detail="Registro medico nao encontrado"
         )
     
     # Admins têm acesso a todos os registros
@@ -33,14 +33,14 @@ async def verify_record_access(
         
     user_id = token_data.get("user_uid")
     
-    # Verifica se o usuário é o paciente ou o médico do registro
+    # Verifica se o usuario e o paciente ou o medico do registro
     is_patient = str(record.patient_id) == user_id
     is_doctor = record.doctor_id == user_id
     
     if not (is_patient or is_doctor):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Sem permissão para acessar este registro"
+            detail="Sem permissao para acessar este registro"
         )
     
     return True
@@ -50,18 +50,18 @@ async def verify_patient_records_access(
     token_data: dict = Depends(token_auth),
     db: Session = Depends(get_db)
 ) -> bool:
-    """Verifica se o usuário tem acesso aos registros do paciente."""
+    """Verifica se o usuario tem acesso aos registros do paciente."""
     # Admins têm acesso a todos os registros
     if "admin" in token_data.get("role", []):
         return True
         
     user_id = token_data.get("user_uid")
     
-    # Verifica se o usuário é o próprio paciente
+    # Verifica se o usuario e o proprio paciente
     if str(patient_id) != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Sem permissão para acessar registros deste paciente"
+            detail="Sem permissao para acessar registros deste paciente"
         )
     
     return True
@@ -71,18 +71,18 @@ async def verify_doctor_records_access(
     token_data: dict = Depends(token_auth),
     db: Session = Depends(get_db)
 ) -> bool:
-    """Verifica se o usuário tem acesso aos registros do médico."""
+    """Verifica se o usuario tem acesso aos registros do medico."""
     # Admins têm acesso a todos os registros
     if "admin" in token_data.get("role", []):
         return True
         
     user_id = token_data.get("user_uid")
     
-    # Verifica se o usuário é o próprio médico
+    # Verifica se o usuario e o proprio medico
     if doctor_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Sem permissão para acessar registros deste médico"
+            detail="Sem permissao para acessar registros deste medico"
         )
     
     return True
@@ -93,18 +93,18 @@ async def verify_patient_access(
     token_data: dict = Depends(token_auth),
     db: Session = Depends(get_db)
 ) -> bool:
-    """Verifica se o usuário tem acesso ao paciente."""
+    """Verifica se o usuario tem acesso ao paciente."""
     # Admins têm acesso a todos os pacientes
     if "admin" in token_data.get("role", []):
         return True
         
     user_id = token_data.get("user_uid")
     
-    # Verifica se o usuário é o próprio paciente
+    # Verifica se o usuario e o proprio paciente
     if str(patient_uid) != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Sem permissão para acessar este paciente"
+            detail="Sem permissao para acessar este paciente"
         )
     
     return True

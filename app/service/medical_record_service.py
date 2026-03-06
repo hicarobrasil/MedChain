@@ -1,5 +1,5 @@
 """
-Serviço para gerenciamento de registros médicos.
+Servico para gerenciamento de registros medicos.
 """
 
 from typing import Dict, List, Optional, Any
@@ -18,11 +18,11 @@ class MedicalRecordService:
 
     def create_medical_record(self, data: Dict[str, Any], file=None) -> MedicalRecord:
         """
-        Cria um novo registro médico e o armazena na blockchain.
+        Cria um novo registro medico e o armazena na blockchain.
 
         Args:
-            data: Dados do registro médico
-            file: Arquivo opcional do pedido médico
+            data: Dados do registro medico
+            file: Arquivo opcional do pedido medico
 
         Returns:
             Objeto MedicalRecord criado
@@ -48,7 +48,7 @@ class MedicalRecordService:
         self.db.commit()
         self.db.refresh(record)
 
-        # Calcular o hash dos dados sensíveis
+        # Calcular o hash dos dados sensiveis
         record_hash = self.solana_client.hash_file(record.sensitive_data())
         record.record_hash = record_hash
 
@@ -66,18 +66,18 @@ class MedicalRecordService:
         return record
 
     def get_medical_record(self, record_id: int) -> Optional[MedicalRecord]:
-        """Busca um registro médico pelo ID."""
+        """Busca um registro medico pelo ID."""
         record = (
             self.db.query(MedicalRecord).filter(MedicalRecord.id == record_id).first()
         )
 
-        # Se encontrou e tem ID de transação, verificar na blockchain
+        # Se encontrou e tem ID de transacao, verificar na blockchain
         if record and record.blockchain_tx_id:
             try:
                 verified = self.solana_client.verify_file(
                     str(record.id), record.sensitive_data(), record.blockchain_tx_id
                 )
-                # Atualizar status de verificação
+                # Atualizar status de verificacao
                 if record.blockchain_verified != verified:
                     record.blockchain_verified = verified
                     self.db.commit()
@@ -87,7 +87,7 @@ class MedicalRecordService:
         return record
 
     def get_medical_records_by_patient(self, patient_id: str) -> List[MedicalRecord]:
-        """Busca todos os registros médicos de um paciente."""
+        """Busca todos os registros medicos de um paciente."""
         return (
             self.db.query(MedicalRecord)
             .filter(MedicalRecord.patient_id == patient_id)
@@ -96,7 +96,7 @@ class MedicalRecordService:
         )
 
     def get_medical_records_by_doctor(self, doctor_id: str) -> List[MedicalRecord]:
-        """Busca todos os registros médicos de um médico."""
+        """Busca todos os registros medicos de um medico."""
         return (
             self.db.query(MedicalRecord)
             .filter(MedicalRecord.doctor_id == doctor_id)
@@ -107,11 +107,11 @@ class MedicalRecordService:
     def get_all_medical_records(
         self, skip: int = 0, limit: int = 100
     ) -> List[MedicalRecord]:
-        """Busca todos os registros médicos com paginação."""
+        """Busca todos os registros medicos com paginacao."""
         return self.db.query(MedicalRecord).offset(skip).limit(limit).all()
 
     def get_patient_medical_records(self, patient_id) -> List[MedicalRecord]:
-        """Busca todos os registros médicos de um paciente."""
+        """Busca todos os registros medicos de um paciente."""
         return (
             self.db.query(MedicalRecord)
             .filter(MedicalRecord.patient_id == patient_id)
@@ -120,7 +120,7 @@ class MedicalRecordService:
         )
 
     def get_doctor_medical_records(self, doctor_id) -> List[MedicalRecord]:
-        """Busca todos os registros médicos de um médico."""
+        """Busca todos os registros medicos de um medico."""
         return (
             self.db.query(MedicalRecord)
             .filter(MedicalRecord.doctor_id == doctor_id)

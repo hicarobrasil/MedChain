@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.doctor.views import DoctorView
 from app.doctor.schemas import DoctorOut
 
-router = APIRouter(tags=["Médico"])
+router = APIRouter(tags=["Medico"])
 
 router.get(
     "/{doctor_id}/", name="get_doctor", response_model=DoctorOut, status_code=200
@@ -14,8 +14,8 @@ router.post(
     response_model=DoctorOut,
     status_code=201,
     responses={
-        201: {"description": "Médico criado com sucesso"},
-        400: {"description": "Dados inválidos"},
+        201: {"description": "Medico criado com sucesso"},
+        400: {"description": "Dados invalidos"},
         500: {"description": "Erro interno do servidor"},
     },
 )(DoctorView.create_doctor)
@@ -26,9 +26,9 @@ router.get(
     response_model=DoctorOut,
     status_code=200,
     responses={
-        200: {"description": "Médico encontrado com sucesso"},
-        404: {"description": "Médico não encontrado"},
-        401: {"description": "Dados inválidos"},
+        200: {"description": "Medico encontrado com sucesso"},
+        404: {"description": "Medico nao encontrado"},
+        401: {"description": "Dados invalidos"},
         403: {"description": "Acesso negado"},
         500: {"description": "Erro interno do servidor"},
     },
@@ -40,9 +40,9 @@ router.put(
     response_model=DoctorOut,
     status_code=200,
     responses={
-        200: {"description": "Médico atualizado com sucesso"},
-        404: {"description": "Médico não encontrado"},
-        401: {"description": "Dados inválidos"},
+        200: {"description": "Medico atualizado com sucesso"},
+        404: {"description": "Medico nao encontrado"},
+        401: {"description": "Dados invalidos"},
         403: {"description": "Acesso negado"},
         500: {"description": "Erro interno do servidor"},
     },

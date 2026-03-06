@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script para testar a autenticação JWT após as correções
+Script para testar a autenticacao JWT apos as correcoes
 """
 
 import sys
@@ -11,11 +11,11 @@ from app.auth.utils import create_access_token, decode_token
 from app.settings import get_settings
 
 def test_jwt_functions():
-    """Testa as funções de criação e decodificação de JWT"""
+    """Testa as funcoes de criacao e decodificacao de JWT"""
     settings = get_settings()
     
-    print("🔧 Testando funções JWT...")
-    print(f"JWT_SECRET configurado: {'Sim' if settings.JWT_SECRET else 'Não'}")
+    print("🔧 Testando funcoes JWT...")
+    print(f"JWT_SECRET configurado: {'Sim' if settings.JWT_SECRET else 'Nao'}")
     print(f"JWT_ALGORITHM: {settings.JWT_ALGORITHM}")
     
     test_user_data = {
@@ -34,7 +34,7 @@ def test_jwt_functions():
         
         if decoded_data:
             print("Token decodificado com sucesso!")
-            print(f"Usuário: {decoded_data['user']['email']}")
+            print(f"Usuario: {decoded_data['user']['email']}")
             print(f"Role: {decoded_data['user']['role']}")
             print(f"Expira em: {decoded_data['exp']}")
         else:

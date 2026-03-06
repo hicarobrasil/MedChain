@@ -13,7 +13,7 @@ from app.errors import UserNotFound
 doctor_router = APIRouter(prefix="/doctors", tags=["doctors"])
 doctor_service = DoctorService()
 
-# Verificadores de permissão
+# Verificadores de permissao
 admin_role = RoleChecker(["admin"])
 admin_or_doctor_role = RoleChecker(["admin", "doctor"])
 
@@ -23,20 +23,20 @@ def create_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_role),
 ):
-    """Cria um novo médico (apenas admin)"""
+    """Cria um novo medico (apenas admin)"""
     
-    # Verificar se CRM já existe
+    # Verificar se CRM ja existe
     if doctor_service.doctor_exists(doctor_data.crm, db):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="CRM já está em uso"
+            detail="CRM ja esta em uso"
         )
     
-    # Verificar se email já existe
+    # Verificar se email ja existe
     if doctor_service.email_exists(doctor_data.email, db):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Email já está em uso"
+            detail="Email ja esta em uso"
         )
     
     try:
@@ -53,11 +53,11 @@ def list_doctors(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     specialty: str = Query(None, description="Filtrar por especialidade"),
-    active_only: bool = Query(False, description="Apenas médicos ativos"),
+    active_only: bool = Query(False, description="Apenas medicos ativos"),
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_or_doctor_role),
 ):
-    """Lista médicos com filtros opcionais"""
+    """Lista medicos com filtros opcionais"""
     
     if specialty:
         doctors = doctor_service.get_doctors_by_specialty(specialty, db)
@@ -74,13 +74,13 @@ def get_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_or_doctor_role),
 ):
-    """Busca um médico pelo ID"""
+    """Busca um medico pelo ID"""
     
     doctor = doctor_service.get_doctor_by_id(doctor_id, db)
     if not doctor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Médico não encontrado"
+            detail="Medico nao encontrado"
         )
     
     return doctor
@@ -91,13 +91,13 @@ def get_doctor_by_crm(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_or_doctor_role),
 ):
-    """Busca um médico pelo CRM"""
+    """Busca um medico pelo CRM"""
     
     doctor = doctor_service.get_doctor_by_crm(crm, db)
     if not doctor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Médico não encontrado"
+            detail="Medico nao encontrado"
         )
     
     return doctor
@@ -109,29 +109,29 @@ def update_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_role),
 ):
-    """Atualiza dados de um médico (apenas admin)"""
+    """Atualiza dados de um medico (apenas admin)"""
     
     doctor = doctor_service.get_doctor_by_id(doctor_id, db)
     if not doctor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Médico não encontrado"
+            detail="Medico nao encontrado"
         )
     
-    # Verificar se novo CRM não está em uso
+    # Verificar se novo CRM nao esta em uso
     if doctor_data.crm and doctor_data.crm != doctor.crm:
         if doctor_service.doctor_exists(doctor_data.crm, db):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="CRM já está em uso"
+                detail="CRM ja esta em uso"
             )
     
-    # Verificar se novo email não está em uso
+    # Verificar se novo email nao esta em uso
     if doctor_data.email and doctor_data.email != doctor.email:
         if doctor_service.email_exists(doctor_data.email, db):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Email já está em uso"
+                detail="Email ja esta em uso"
             )
     
     try:
@@ -149,18 +149,18 @@ def delete_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_role),
 ):
-    """Remove um médico (apenas admin)"""
+    """Remove um medico (apenas admin)"""
     
     doctor = doctor_service.get_doctor_by_id(doctor_id, db)
     if not doctor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Médico não encontrado"
+            detail="Medico nao encontrado"
         )
     
     success = doctor_service.delete_doctor(doctor, db)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao remover médico"
+            detail="Erro ao remover medico"
         )

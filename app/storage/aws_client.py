@@ -26,7 +26,7 @@ class S3Client:
         key = os.getenv("MEDICAL_RECORDS_API_CRYPTO_KEY")
         if not key:
             raise ValueError(
-                "Defina a variável de ambiente MEDICAL_RECORDS_API_CRYPTO_KEY"
+                "Defina a variavel de ambiente MEDICAL_RECORDS_API_CRYPTO_KEY"
             )
         self.fernet = Fernet(key.encode())
 
@@ -48,7 +48,7 @@ class S3Client:
 
     def download_file(self, key: str) -> UploadFile:
         """
-        Baixa um arquivo do S3 e retorna um UploadFile já descriptografado.
+        Baixa um arquivo do S3 e retorna um UploadFile ja descriptografado.
         """
         buffer = BytesIO()
         self.s3.download_fileobj(self.bucket_name, key, buffer)
@@ -64,7 +64,7 @@ class S3Client:
         return decrypted_file
 
     def criptograph_file(self, file: UploadFile) -> bytes:
-        """Retorna conteúdo criptografado de um UploadFile."""
+        """Retorna conteudo criptografado de um UploadFile."""
         content = file.file.read()
         encrypted = self.fernet.encrypt(content)
         file.file.seek(0)

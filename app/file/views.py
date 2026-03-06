@@ -32,12 +32,12 @@ class FileView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado.",
+                detail="Usuario nao autenticado.",
             )
 
         if user.role not in [UserRole.DOCTOR, UserRole.ADMIN]:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Permissão negada."
+                status_code=status.HTTP_403_FORBIDDEN, detail="Permissao negada."
             )
 
         file_type = file.content_type
@@ -48,7 +48,7 @@ class FileView:
         ]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tipo de arquivo não suportado. Apenas JPEG, PNG e PDF são permitidos.",
+                detail="Tipo de arquivo nao suportado. Apenas JPEG, PNG e PDF sao permitidos.",
             )
 
         stmt_user = select(UserModel).where(UserModel.email == user.email)
@@ -56,7 +56,7 @@ class FileView:
         user_db = result_user.scalar_one_or_none()
 
         if not user_db:
-            raise HTTPException(status_code=401, detail="Usuário não encontrado.")
+            raise HTTPException(status_code=401, detail="Usuario nao encontrado.")
 
         stmt_doctor = select(DoctorModel).where(DoctorModel.user_id == user_db.id)
         result_doctor = await db.execute(stmt_doctor)
@@ -65,7 +65,7 @@ class FileView:
         if not doctor:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas médicos cadastrados podem enviar arquivos.",
+                detail="Apenas medicos cadastrados podem enviar arquivos.",
             )
 
         try:
@@ -80,12 +80,12 @@ class FileView:
             filename = f"{uuid.uuid4()}.{file_ext}"
             file_path = os.path.join(upload_dir, filename)
 
-            # Criptografar o conteúdo antes de salvar
+            # Criptografar o conteudo antes de salvar
             key = os.getenv("MEDICAL_RECORDS_API_CRYPTO_KEY")
             if not key:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Chave de criptografia não configurada.",
+                    detail="Chave de criptografia nao configurada.",
                 )
             fernet = Fernet(key.encode())
             encrypted_content = fernet.encrypt(content)
@@ -137,7 +137,7 @@ class FileView:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário não autenticado.",
+                detail="Usuario nao autenticado.",
             )
 
         stmt = select(FileModel).where(FileModel.id == file_id)
@@ -145,7 +145,7 @@ class FileView:
         file_record = result.scalar_one_or_none()
 
         if not file_record:
-            raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
+            raise HTTPException(status_code=404, detail="Arquivo nao encontrado.")
 
         return {
             "id": file_record.id,

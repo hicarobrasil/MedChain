@@ -8,41 +8,41 @@ from app.doctor.schemas import DoctorCreate, DoctorUpdate
 class DoctorService:
     
     def get_doctor_by_id(self, doctor_id: UUID, db: Session) -> Optional[DoctorRecord]:
-        """Busca um médico pelo ID"""
+        """Busca um medico pelo ID"""
         return db.query(DoctorRecord).filter(DoctorRecord.uid == doctor_id).first()
     
     def get_doctor_by_crm(self, crm: str, db: Session) -> Optional[DoctorRecord]:
-        """Busca um médico pelo CRM"""
+        """Busca um medico pelo CRM"""
         return db.query(DoctorRecord).filter(DoctorRecord.crm == crm).first()
     
     def get_doctor_by_email(self, email: str, db: Session) -> Optional[DoctorRecord]:
-        """Busca um médico pelo email"""
+        """Busca um medico pelo email"""
         return db.query(DoctorRecord).filter(DoctorRecord.email == email).first()
     
     def doctor_exists(self, crm: str, db: Session) -> bool:
-        """Verifica se um médico já existe pelo CRM"""
+        """Verifica se um medico ja existe pelo CRM"""
         return self.get_doctor_by_crm(crm, db) is not None
     
     def email_exists(self, email: str, db: Session) -> bool:
-        """Verifica se o email já está em uso"""
+        """Verifica se o email ja esta em uso"""
         return self.get_doctor_by_email(email, db) is not None
     
     def create_doctor(self, doctor_data: DoctorCreate, db: Session) -> DoctorRecord:
-        """Cria um novo médico"""
+        """Cria um novo medico"""
         
         # Converter specialty para int se for string
         specialty_value = doctor_data.specialty
         if isinstance(specialty_value, str):
             specialty_value = SPECIALTY_MAP_REVERSE.get(specialty_value.upper())
             if specialty_value is None:
-                raise ValueError(f"Especialidade inválida: {doctor_data.specialty}")
+                raise ValueError(f"Especialidade invalida: {doctor_data.specialty}")
         
         # Converter status para int se for string  
         status_value = doctor_data.status
         if isinstance(status_value, str):
             status_value = STATUS_MAP_REVERSE.get(status_value.upper())
             if status_value is None:
-                raise ValueError(f"Status inválido: {doctor_data.status}")
+                raise ValueError(f"Status invalido: {doctor_data.status}")
         
         new_doctor = DoctorRecord(
             name=doctor_data.name,
@@ -62,7 +62,7 @@ class DoctorService:
         return new_doctor
     
     def update_doctor(self, doctor: DoctorRecord, doctor_data: DoctorUpdate, db: Session) -> DoctorRecord:
-        """Atualiza dados de um médico"""
+        """Atualiza dados de um medico"""
         
         update_data = doctor_data.dict(exclude_unset=True)
         
@@ -72,7 +72,7 @@ class DoctorService:
             if isinstance(specialty_value, str):
                 specialty_value = SPECIALTY_MAP_REVERSE.get(specialty_value.upper())
                 if specialty_value is None:
-                    raise ValueError(f"Especialidade inválida: {update_data['specialty']}")
+                    raise ValueError(f"Especialidade invalida: {update_data['specialty']}")
                 update_data['specialty'] = specialty_value
         
         # Converter status se fornecido
@@ -81,7 +81,7 @@ class DoctorService:
             if isinstance(status_value, str):
                 status_value = STATUS_MAP_REVERSE.get(status_value.upper())
                 if status_value is None:
-                    raise ValueError(f"Status inválido: {update_data['status']}")
+                    raise ValueError(f"Status invalido: {update_data['status']}")
                 update_data['status'] = status_value
         
         for field, value in update_data.items():
@@ -93,7 +93,7 @@ class DoctorService:
         return doctor
     
     def delete_doctor(self, doctor: DoctorRecord, db: Session) -> bool:
-        """Remove um médico do banco"""
+        """Remove um medico do banco"""
         try:
             db.delete(doctor)
             db.commit()
@@ -103,11 +103,11 @@ class DoctorService:
             return False
     
     def get_all_doctors(self, skip: int = 0, limit: int = 100, db: Session = None) -> List[DoctorRecord]:
-        """Lista todos os médicos com paginação"""
+        """Lista todos os medicos com paginacao"""
         return db.query(DoctorRecord).offset(skip).limit(limit).all()
     
     def get_doctors_by_specialty(self, specialty: str, db: Session) -> List[DoctorRecord]:
-        """Busca médicos por especialidade"""
+        """Busca medicos por especialidade"""
         specialty_value = SPECIALTY_MAP_REVERSE.get(specialty.upper())
         if specialty_value is None:
             return []
@@ -115,5 +115,5 @@ class DoctorService:
         return db.query(DoctorRecord).filter(DoctorRecord.specialty == specialty_value).all()
     
     def get_active_doctors(self, db: Session) -> List[DoctorRecord]:
-        """Busca apenas médicos ativos"""
+        """Busca apenas medicos ativos"""
         return db.query(DoctorRecord).filter(DoctorRecord.status == StatusEnum.ACTIVE).all()

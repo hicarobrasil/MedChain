@@ -1,11 +1,7 @@
-import os
+import sys
 from typing import Generator
 from urllib.parse import quote_plus
 
-# Força UTF-8 para evitar UnicodeDecodeError em credenciais com acentos
-os.environ.setdefault("PGCLIENTENCODING", "UTF8")
-
-import psycopg2
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.orm import Session as SQLAlchemySession
@@ -14,21 +10,23 @@ from app.settings import Settings
 
 settings = Settings()
 
-
-def _create_connection():
-    """Cria conexão via DSN com encoding seguro para senhas com acentos."""
-    suffix = settings.DATABASE_ENVIRONMENT_SUFFIX or ""
-    dbname = f"medchain_db{suffix}"
-    # URL-encode evita UnicodeDecodeError com caracteres especiais (ã, ç, etc.)
-    user = quote_plus(settings.POSTGRES_USER)
-    password = quote_plus(settings.POSTGRES_PASSWORD)
-    dsn = f"postgresql://{user}:{password}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{dbname}"
-    return psycopg2.connect(dsn, options="-c client_encoding=UTF8")
-
+# No Windows fora do Docker, "postgres" nao resolve
+host = (
+    "localhost"
+    if (sys.platform == "win32" and settings.POSTGRES_HOST == "postgres")
+    else settings.POSTGRES_HOST
+)
+suffix = settings.DATABASE_ENVIRONMENT_SUFFIX or ""
+dbname = f"medchain_db{suffix}"
+user = quote_plus(settings.POSTGRES_USER)
+password = quote_plus(settings.POSTGRES_PASSWORD)
+# psycopg (v3) tem melhor suporte a encoding no Windows que psycopg2
+database_url = (
+    f"postgresql+psycopg://{user}:{password}@{host}:{settings.POSTGRES_PORT}/{dbname}"
+)
 
 engine = create_engine(
-    "postgresql+psycopg2://",
-    creator=_create_connection,
+    database_url,
     pool_pre_ping=True,
     pool_use_lifo=True,
     pool_size=30,
@@ -46,7 +44,7 @@ def get_session() -> Generator[SQLAlchemySession, None, None]:
 
 
 def init_db() -> None:
-    """Cria as tabelas no banco de dados. Importa os models para registrá-los no Base."""
+    """Cria as tabelas no banco de dados. Importa os models para registra-los no Base."""
     from app.models import (  # noqa: F401
         address,
         consultation,

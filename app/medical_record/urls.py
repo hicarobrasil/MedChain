@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.medical_record.views import MedicalRecordsView
 from typing import Union, List, Dict
 
-router = APIRouter(tags=["Prontuário Médico"])
+router = APIRouter(tags=["Prontuario Medico"])
 
 router.get(
     "/",

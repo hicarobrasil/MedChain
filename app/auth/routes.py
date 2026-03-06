@@ -13,6 +13,7 @@ from app.auth.utils import (
 from app.auth.schemas import (
     UserCreateModel,
     UserLoginModel,
+    DoctorRegisterModel,
     PasswordResetRequestModel,
     PasswordResetConfirmModel,
     TokenResponse,
@@ -31,6 +32,10 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import logging
 from app.auth.dependencies import AccessTokenBearer, RefreshTokenBearer, get_current_user
+from app.auth.utils import make_password
+from app.models.user import UserModel, StatusEnum
+from app.models.doctor import DoctorModel
+from app.models.doctor import SpecialtyEnum as DoctorSpecialtyEnum
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 user_service = UserService()
@@ -86,6 +91,81 @@ def create_user_account(
             "email": new_user.email,
         }
     }
+
+
+@auth_router.post("/register-doctor", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
+def register_doctor(
+    data: DoctorRegisterModel,
+    db: Session = Depends(get_db),
+):
+    """Cadastro de medico: cria auth_users (login) + users/doctor (dados do app)."""
+    if user_service.user_exists(data.email, db):
+        raise UserAlreadyExists()
+    auth_user = user_service.create_user(
+        UserCreateModel(username=data.email, email=data.email, password=data.password),
+        db,
+    )
+    user_service.update_user(auth_user, {"role": "doctor", "is_verified": True}, db)
+    app_user = UserModel(
+        full_name=data.full_name,
+        email=data.email,
+        password=make_password(data.password),
+        status=StatusEnum.ACTIVE,
+    )
+    db.add(app_user)
+    db.commit()
+    db.refresh(app_user)
+    spec_map = {
+        "clínica geral": "GENERAL",
+        "clinica geral": "GENERAL",
+        "cardiologia": "CARDIOLOGY",
+        "dermatologia": "DERMATOLOGY",
+        "neurologia": "NEUROLOGY",
+        "pediatria": "PEDIATRICS",
+        "psiquiatria": "PSYCHIATRY",
+        "ortopedia": "ORTHOPEDICS",
+    }
+    spec_key = data.specialty.strip().lower()
+    spec_value = spec_map.get(spec_key) or data.specialty.upper().replace(" ", "_").replace("Í", "I")
+    try:
+        specialty = DoctorSpecialtyEnum(spec_value)
+    except ValueError:
+        specialty = DoctorSpecialtyEnum.OTHER
+    doctor = DoctorModel(
+        CRM=data.CRM,
+        specialty=specialty,
+        user_id=app_user.id,
+    )
+    db.add(doctor)
+    db.commit()
+    db.refresh(doctor)
+    access_token = create_access_token(
+        user_data={
+            "email": auth_user.email,
+            "user_uid": str(auth_user.uid),
+            "role": "doctor",
+        }
+    )
+    refresh_token = create_access_token(
+        user_data={"email": auth_user.email, "user_uid": str(auth_user.uid)},
+        refresh=True,
+        expiry_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+    )
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "uid": str(auth_user.uid),
+            "email": auth_user.email,
+            "username": auth_user.username,
+            "is_verified": True,
+            "role": "doctor",
+            "type": "doctor",
+            "public_id": str(doctor.public_id),
+        },
+    }
+
 
 @auth_router.get("/verify/{token}", status_code=status.HTTP_200_OK)
 def verify_user_account(token: str, db: Session = Depends(get_db)):

@@ -142,21 +142,27 @@ class PatientView:
                 detail="Acesso negado",
             )
 
-        patients = db.join(UserModel, PatientModel.user_id == UserModel.id).all(
-            PatientModel
+        patients = (
+            db.query(PatientModel)
+            .join(UserModel, PatientModel.user_id == UserModel.id)
+            .all()
         )
         return [
             {
-                "uid": patient.user.public_id,
+                "uid": str(patient.user.public_id),
+                "id": str(patient.user.public_id),
                 "name": patient.user.full_name,
+                "full_name": patient.user.full_name,
                 "email": patient.user.email,
                 "phone": patient.cellphone,
-                "dateofbirth": patient.birth,
-                "gender": patient.gender,
-                "status": patient.status,
+                "cellphone": patient.cellphone,
+                "dateofbirth": patient.birth_date.isoformat() if patient.birth_date else None,
+                "birth_date": patient.birth_date.isoformat() if patient.birth_date else None,
+                "gender": patient.gender.value if hasattr(patient.gender, "value") else patient.gender,
+                "status": patient.user.status.value if hasattr(patient.user.status, "value") else str(patient.user.status),
             }
             for patient in patients
-        ], 200
+        ]
 
     @staticmethod
     async def put(

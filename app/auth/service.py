@@ -57,3 +57,6 @@ class UserTokenService:
         db.commit()
         db.refresh(user)
         return user
+
+
+UserService = UserTokenService  # alias

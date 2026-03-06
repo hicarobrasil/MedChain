@@ -15,6 +15,27 @@ from app.models.user import UserModel
 class DoctorView:
 
     @staticmethod
+    async def list_doctors(
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario nao autenticado")
+        doctors = db.query(DoctorModel).join(UserModel, DoctorModel.user_id == UserModel.id).all()
+        return [
+            {
+                "id": str(d.public_id),
+                "public_id": str(d.public_id),
+                "uid": str(d.public_id),
+                "full_name": d.user.full_name,
+                "email": d.user.email,
+                "CRM": d.CRM,
+                "specialty": d.specialty.value if hasattr(d.specialty, "value") else str(d.specialty),
+            }
+            for d in doctors
+        ]
+
+    @staticmethod
     async def get_doctor(
         doctor_id: UUID,
         db: SQLAlchemySession = Depends(get_session),
@@ -67,7 +88,7 @@ class DoctorView:
         db.commit()
         db.refresh(doctor)
 
-        return 201, doctor
+        return doctor
 
     @staticmethod
     async def update_doctor(
@@ -108,4 +129,4 @@ class DoctorView:
         db.commit()
         db.refresh(doctor)
 
-        return doctor, 200
+        return doctor

@@ -37,3 +37,11 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user: dict
+
+
+class DoctorRegisterModel(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str = Field(min_length=6)
+    CRM: str
+    specialty: str

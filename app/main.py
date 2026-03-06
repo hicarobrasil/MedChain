@@ -13,10 +13,15 @@ from app.doctor.urls import router as doctor_router
 from app.medical_record.urls import router as medical_records_router
 from app.patient.urls import router as pacient_records_router
 from app.file.urls import router as file_router
+from app.auth.routes import auth_router
 from app.database import init_db
+import logging
 
-# Initialize the database
-init_db()
+# Initialize the database (nao bloqueia a app se falhar)
+try:
+    init_db()
+except Exception as e:
+    logging.warning(f"init_db falhou (rotas ainda disponiveis): {e}")
 
 
 def create_app() -> FastAPI:
@@ -37,10 +42,11 @@ def create_app() -> FastAPI:
     )
 
     # Registrar rotas
-    app.include_router(medical_records_router, prefix="/api/v1")
-    app.include_router(pacient_records_router, prefix="/api/v1")
-    app.include_router(doctor_router, prefix="/api/v1")
-    app.include_router(file_router, prefix="/api/v1")
+    app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(doctor_router, prefix="/api/v1/doctors")
+    app.include_router(pacient_records_router, prefix="/api/v1/patients")
+    app.include_router(medical_records_router, prefix="/api/v1/medical-records")
+    app.include_router(file_router, prefix="/api/v1/files")
 
     return app
 

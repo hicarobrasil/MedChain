@@ -22,17 +22,9 @@ router.post(
 
 router.get(
     "/",
-    name="get_doctor",
-    response_model=DoctorOut,
+    name="list_doctors",
     status_code=200,
-    responses={
-        200: {"description": "Medico encontrado com sucesso"},
-        404: {"description": "Medico nao encontrado"},
-        401: {"description": "Dados invalidos"},
-        403: {"description": "Acesso negado"},
-        500: {"description": "Erro interno do servidor"},
-    },
-)(DoctorView.get_doctor)
+)(DoctorView.list_doctors)
 
 router.put(
     "/{doctor_id}/",

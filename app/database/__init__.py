@@ -43,6 +43,9 @@ def get_session() -> Generator[SQLAlchemySession, None, None]:
         yield session
 
 
+get_db = get_session  # alias para compatibilidade
+
+
 def init_db() -> None:
     """Cria as tabelas no banco de dados. Importa os models para registra-los no Base."""
     from app.models import (  # noqa: F401

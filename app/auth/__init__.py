@@ -13,9 +13,9 @@ api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
 class UserRole(str, Enum):
-    ADMIN = "ADMN"
-    DOCTOR = "DOCT"
-    PATIENT = "PACI"
+    ADMIN = "admin"
+    DOCTOR = "doctor"
+    PATIENT = "patient"
 
 
 class User(metaclass=ABCMeta):

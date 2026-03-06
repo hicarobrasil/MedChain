@@ -26,8 +26,12 @@ class MedicalRecordModel(Base):
     )
     hash: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     blockchain_tx_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    doctor_id: Mapped[str] = mapped_column(ForeignKey("doctor.public_id"))
-    patient_id: Mapped[str] = mapped_column(ForeignKey("patient.public_id"))
+    doctor_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("doctor.public_id")
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("patient.public_id")
+    )
     doctor: Mapped["DoctorModel"] = relationship()
     patient: Mapped["PatientModel"] = relationship()
 

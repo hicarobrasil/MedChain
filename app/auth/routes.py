@@ -156,9 +156,11 @@ def register_doctor(
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": {
+            "id": str(doctor.public_id),
             "uid": str(auth_user.uid),
             "email": auth_user.email,
             "username": auth_user.username,
+            "full_name": data.full_name,
             "is_verified": True,
             "role": "doctor",
             "type": "doctor",

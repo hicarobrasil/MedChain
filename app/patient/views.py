@@ -6,8 +6,11 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from app.auth import User, UserRole, get_user
+from app.auth.service import UserService
+from app.auth.schemas import UserCreateModel
 from app.auth.utils import make_password
 from app.database import get_session
+from app.errors import UserAlreadyExists
 from app.models.address import AddressModel
 from app.models.patient import GenderEnum, PatientModel
 from app.models.user import StatusEnum
@@ -35,10 +38,24 @@ class PatientView:
                 detail="Acesso negado",
             )
 
+        user_svc = UserService()
+        if user_svc.user_exists(patient.email, db):
+            raise UserAlreadyExists()
+
+        auth_user = user_svc.create_user(
+            UserCreateModel(
+                username=patient.email,
+                email=patient.email,
+                password=patient.password,
+            ),
+            db,
+        )
+        user_svc.update_user(auth_user, {"role": "patient", "is_verified": True}, db)
+
         user_created = UserModel(
             full_name=patient.name,
             email=patient.email,
-            password=make_password(patient.phone),
+            password=make_password(patient.password),
             status=StatusEnum.ACTIVE,
         )
         db.add(user_created)

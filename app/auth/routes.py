@@ -304,9 +304,11 @@ def check_user_role(email: str, db: Session = Depends(get_db)):
 
 
 def _resolve_user_role(email: str, auth_role: str, db: Session) -> str:
-    """Deriva o role real: se auth_role já é doctor, ou se o email pertence a um médico (users+doctor), retorna 'doctor'."""
+    """Deriva o role real: doctor, patient ou admin conforme auth_role e dados em users/doctor/patient."""
     if auth_role and str(auth_role).lower() == "doctor":
         return "doctor"
+    if auth_role and str(auth_role).lower() == "patient":
+        return "patient"
     email_lower = (email or "").strip().lower()
     if not email_lower:
         return auth_role if auth_role in ("doctor", "patient", "admin") else "patient"
@@ -314,7 +316,12 @@ def _resolve_user_role(email: str, auth_role: str, db: Session) -> str:
     if not app_user:
         return auth_role if auth_role in ("doctor", "patient", "admin") else "patient"
     doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first()
-    return "doctor" if doctor else (auth_role if auth_role in ("doctor", "patient", "admin") else "patient")
+    patient = db.query(PatientModel).filter(PatientModel.user_id == app_user.id).first()
+    if doctor:
+        return "doctor"
+    if patient:
+        return "patient"
+    return auth_role if auth_role in ("doctor", "patient", "admin") else "patient"
 
 
 @auth_router.post("/login", response_model=TokenResponse)

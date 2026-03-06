@@ -336,13 +336,18 @@ def login_user(
 
     role = _resolve_user_role(email, user.role or "", db)
     public_id = None
-    if role == "doctor":
-        email_lower = (email or "").strip().lower()
-        app_user = db.query(UserModel).filter(func.lower(UserModel.email) == email_lower).first()
-        if app_user:
+    patient_public_id = None
+    email_lower = (email or "").strip().lower()
+    app_user = db.query(UserModel).filter(func.lower(UserModel.email) == email_lower).first()
+    if app_user:
+        if role == "doctor":
             doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first()
             if doctor:
                 public_id = str(doctor.public_id)
+        elif role == "patient":
+            patient = db.query(PatientModel).filter(PatientModel.user_id == app_user.id).first()
+            if patient:
+                patient_public_id = str(patient.public_id)
         
     access_token = create_access_token(
         user_data={
@@ -371,6 +376,8 @@ def login_user(
     if public_id:
         user_payload["id"] = public_id
         user_payload["public_id"] = public_id
+    if patient_public_id:
+        user_payload["patient_public_id"] = patient_public_id
 
     return {
         "access_token": access_token,

@@ -287,14 +287,15 @@ class MedicalRecordsView:
             logger.error(f"Erro ao registrar na blockchain: {str(e)}")
             # Nao interrompe o fluxo principal, mas loga o erro (ou poderia lancar excecao dependendo da regra de negocio)
 
+        medical_record_public_id = str(medical_record.public_id)
         if type == MedicalRecordTypes.CONSULTATION:
-            return consultation
+            return {"medical_record_public_id": medical_record_public_id, "consultation": consultation}
         elif type == MedicalRecordTypes.DIAGNOSTIC:
-            return diagnostic
+            return {"medical_record_public_id": medical_record_public_id, "diagnostic": diagnostic}
         elif type == MedicalRecordTypes.MEDICAL_CERTIFICATE:
-            return medical_certificate
+            return {"medical_record_public_id": medical_record_public_id, "medical_certificate": medical_certificate}
 
-        return {"message": "Registro criado", "data": record_specific_data}
+        return {"medical_record_public_id": medical_record_public_id, "message": "Registro criado", "data": record_specific_data}
 
     async def get_by_public_id(
         self,

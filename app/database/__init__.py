@@ -1,6 +1,11 @@
+import os
 from typing import Generator
-from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+from urllib.parse import quote_plus
 
+# Força UTF-8 para evitar UnicodeDecodeError em credenciais com acentos
+os.environ.setdefault("PGCLIENTENCODING", "UTF8")
+
+import psycopg2
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.orm import Session as SQLAlchemySession
@@ -9,19 +14,21 @@ from app.settings import Settings
 
 settings = Settings()
 
-# Remove parâmetros incompatíveis com PostgreSQL (ex: charset é opção MySQL)
-_db_url = settings.SQLALCHEMY_DATABASE_URI
-if _db_url and "charset" in _db_url.lower():
-    parsed = urlparse(_db_url)
-    query = parse_qs(parsed.query)
-    for key in list(query.keys()):
-        if key.lower() == "charset":
-            del query[key]
-    new_query = urlencode(query, doseq=True)
-    _db_url = urlunparse(parsed._replace(query=new_query))
+
+def _create_connection():
+    """Cria conexão via DSN com encoding seguro para senhas com acentos."""
+    suffix = settings.DATABASE_ENVIRONMENT_SUFFIX or ""
+    dbname = f"medchain_db{suffix}"
+    # URL-encode evita UnicodeDecodeError com caracteres especiais (ã, ç, etc.)
+    user = quote_plus(settings.POSTGRES_USER)
+    password = quote_plus(settings.POSTGRES_PASSWORD)
+    dsn = f"postgresql://{user}:{password}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{dbname}"
+    return psycopg2.connect(dsn, options="-c client_encoding=UTF8")
+
 
 engine = create_engine(
-    url=_db_url or settings.SQLALCHEMY_DATABASE_URI,
+    "postgresql+psycopg2://",
+    creator=_create_connection,
     pool_pre_ping=True,
     pool_use_lifo=True,
     pool_size=30,

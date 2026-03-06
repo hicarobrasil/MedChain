@@ -48,6 +48,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"  # Garante leitura correta de acentos no .env
         case_sensitive = True
         extra = "allow"
 

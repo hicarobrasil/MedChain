@@ -202,11 +202,18 @@ class DoctorView:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acesso negado",
             )
-        if user.role == UserRole.DOCTOR and str(getattr(user, "id", "")) != str(doctor_id) and str(getattr(user, "public_id", "")) != str(doctor_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acesso negado aos pacientes de outro medico",
+        if user.role == UserRole.DOCTOR:
+            doctor_logged = (
+                db.query(DoctorModel)
+                .join(UserModel, DoctorModel.user_id == UserModel.id)
+                .filter(UserModel.email == user.email)
+                .first()
             )
+            if not doctor_logged or str(doctor_logged.public_id) != str(doctor_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Acesso negado aos pacientes de outro medico",
+                )
 
         doctor = db.query(DoctorModel).filter(DoctorModel.public_id == doctor_id).first()
         if not doctor:

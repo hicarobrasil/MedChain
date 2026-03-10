@@ -12,6 +12,8 @@ from app.auth.utils import make_password
 from app.database import get_session
 from app.errors import UserAlreadyExists
 from app.models.address import AddressModel
+from app.models.doctor import DoctorModel
+from app.models.medical_record import MedicalRecordModel
 from app.models.patient import GenderEnum, PatientModel
 from app.models.user import StatusEnum
 from app.models.user import UserModel
@@ -85,6 +87,22 @@ class PatientView:
         db.add(create_address)
         db.commit()
         db.refresh(create_address)
+
+        # Vincula o paciente ao medico que o criou (prontuario inicial) para aparecer na listagem
+        if user.role == UserRole.DOCTOR:
+            doctor = (
+                db.query(DoctorModel)
+                .join(UserModel, DoctorModel.user_id == UserModel.id)
+                .filter(UserModel.email == user.email)
+                .first()
+            )
+            if doctor:
+                medical_record = MedicalRecordModel(
+                    doctor_id=doctor.public_id,
+                    patient_id=create_patient.public_id,
+                )
+                db.add(medical_record)
+                db.commit()
 
         return {
             "uid": str(user_created.public_id),

@@ -30,6 +30,7 @@ from app.errors import (
 )
 from fastapi import BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import logging
@@ -126,6 +127,18 @@ def register_doctor(
 ):
     """Cadastro de medico: cria auth_users (login) + users/doctor (dados do app)."""
     try:
+        # Verifica se ja existe medico com o mesmo CRM antes de qualquer alteracao
+        existing_doctor = (
+            db.query(DoctorModel)
+            .filter(DoctorModel.CRM == data.CRM)
+            .first()
+        )
+        if existing_doctor:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este CRM já está cadastrado para outro médico.",
+            )
+
         if user_service.user_exists(data.email, db):
             raise UserAlreadyExists()
         auth_user = user_service.create_user(
@@ -153,7 +166,21 @@ def register_doctor(
         db.refresh(doctor)
     except UserAlreadyExists:
         raise
+    except IntegrityError as e:
+        # Erros de constraint (como CRM duplicado) devem gerar 409 e nao deixar estado inconsistente
+        db.rollback()
+        logging.exception("Erro de integridade ao cadastrar médico")
+        if "doctor_CRM_key" in str(e.orig) or "CRM" in str(e.orig):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este CRM já está cadastrado para outro médico.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Já existe um registro conflitante para este médico (email ou CRM).",
+        )
     except Exception as e:
+        db.rollback()
         logging.exception("Erro ao cadastrar médico")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -261,7 +288,14 @@ def complete_doctor_registration(data: DoctorCompleteModel, db: Session = Depend
         doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first()
         if doctor:
             raise HTTPException(status_code=400, detail="Este email já está cadastrado como médico.")
-        raise HTTPException(status_code=400, detail="Este email já existe como paciente. Use outro email.")
+        patient = db.query(PatientModel).filter(PatientModel.user_id == app_user.id).first()
+        if patient:
+            raise HTTPException(status_code=400, detail="Este email já existe como paciente. Use outro email.")
+        # Usuario de app ja existe, mas nao e paciente nem médico: estado inesperado
+        raise HTTPException(
+            status_code=400,
+            detail="Este email já está em uso em outra conta do sistema. Use outro email ou contate o suporte.",
+        )
     # Criar UserModel e DoctorModel
     app_user = UserModel(
         full_name=data.full_name,

@@ -5,6 +5,18 @@ from app.doctor.schemas import DoctorOut
 router = APIRouter(tags=["Medico"])
 
 router.get(
+    "/{doctor_id}/dashboard-stats",
+    name="get_doctor_dashboard_stats",
+    status_code=200,
+)(DoctorView.get_dashboard_stats)
+
+router.get(
+    "/{doctor_id}/patients",
+    name="get_doctor_patients",
+    status_code=200,
+)(DoctorView.get_doctor_patients)
+
+router.get(
     "/{doctor_id}/", name="get_doctor", response_model=DoctorOut, status_code=200
 )(DoctorView.get_doctor)
 

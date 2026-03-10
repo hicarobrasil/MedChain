@@ -10,6 +10,11 @@ from app.doctor.schemas import DoctorIn
 from app.models.doctor import DoctorModel, SpecialtyEnum
 from app.models.user import StatusEnum
 from app.models.user import UserModel
+from app.models.medical_record import MedicalRecordModel
+from app.models.consultation import ConsultationModel
+from app.models.diagnostic import DiagnosticModel
+from app.models.medical_certificated import MedicalCertificatedModel
+from app.models.patient import PatientModel
 
 
 class DoctorView:
@@ -130,3 +135,112 @@ class DoctorView:
         db.refresh(doctor)
 
         return doctor
+
+    @staticmethod
+    async def get_dashboard_stats(
+        doctor_id: UUID,
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        """Retorna estatisticas do dashboard do medico: pacientes, prontuarios e consultas."""
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario nao autenticado",
+            )
+        if user.role not in [UserRole.ADMIN, UserRole.DOCTOR]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso negado",
+            )
+
+        doctor = db.query(DoctorModel).filter(DoctorModel.public_id == doctor_id).first()
+        if not doctor:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Medico nao encontrado",
+            )
+
+        records = db.query(MedicalRecordModel).filter(MedicalRecordModel.doctor_id == doctor_id).all()
+        record_ids = [r.id for r in records]
+
+        patients_with_records = len(set(r.patient_id for r in records))
+        total_patients = db.query(PatientModel).count()
+        consultations_count = db.query(ConsultationModel).filter(
+            ConsultationModel.medical_record_id.in_(record_ids)
+        ).count() if record_ids else 0
+        diagnostics_count = db.query(DiagnosticModel).filter(
+            DiagnosticModel.medical_record_id.in_(record_ids)
+        ).count() if record_ids else 0
+        certificates_count = db.query(MedicalCertificatedModel).filter(
+            MedicalCertificatedModel.medical_record_id.in_(record_ids)
+        ).count() if record_ids else 0
+
+        return {
+            "patients": total_patients,
+            "patients_with_records": patients_with_records,
+            "medical_records": len(records),
+            "consultations": consultations_count,
+            "diagnostics": diagnostics_count,
+            "certificates": certificates_count,
+        }
+
+    @staticmethod
+    async def get_doctor_patients(
+        doctor_id: UUID,
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        """Retorna pacientes que possuem prontuario com este medico."""
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario nao autenticado",
+            )
+        if user.role not in [UserRole.ADMIN, UserRole.DOCTOR]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso negado",
+            )
+        if user.role == UserRole.DOCTOR and str(getattr(user, "id", "")) != str(doctor_id) and str(getattr(user, "public_id", "")) != str(doctor_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso negado aos pacientes de outro medico",
+            )
+
+        doctor = db.query(DoctorModel).filter(DoctorModel.public_id == doctor_id).first()
+        if not doctor:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Medico nao encontrado",
+            )
+
+        patient_ids = db.query(MedicalRecordModel.patient_id).filter(
+            MedicalRecordModel.doctor_id == doctor_id
+        ).distinct().all()
+        patient_ids = [pid[0] for pid in patient_ids if pid[0]]
+
+        if not patient_ids:
+            return []
+
+        patients = db.query(PatientModel).join(UserModel, PatientModel.user_id == UserModel.id).filter(
+            PatientModel.public_id.in_(patient_ids)
+        ).all()
+
+        return [
+            {
+                "uid": str(p.user.public_id),
+                "id": str(p.user.public_id),
+                "patient_public_id": str(p.public_id),
+                "name": p.user.full_name,
+                "full_name": p.user.full_name,
+                "email": p.user.email,
+                "phone": p.cellphone,
+                "cellphone": p.cellphone,
+                "dateofbirth": p.birth_date.isoformat() if p.birth_date else None,
+                "birth_date": p.birth_date.isoformat() if p.birth_date else None,
+                "gender": p.gender.value if hasattr(p.gender, "value") else str(p.gender),
+                "status": p.user.status.value if hasattr(p.user.status, "value") else str(p.user.status),
+            }
+            for p in patients
+        ]

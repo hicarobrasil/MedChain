@@ -40,6 +40,7 @@ from app.models.user import UserModel, StatusEnum
 from app.models.doctor import DoctorModel
 from app.models.doctor import SpecialtyEnum as DoctorSpecialtyEnum
 from app.models.patient import PatientModel
+from app.models.address import AddressModel
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 user_service = UserService()
@@ -418,7 +419,26 @@ def login_user(
         user_payload["id"] = public_id
         user_payload["public_id"] = public_id
     if patient_public_id:
+        user_payload["id"] = patient_public_id
         user_payload["patient_public_id"] = patient_public_id
+        patient = db.query(PatientModel).filter(PatientModel.public_id == patient_public_id).first()
+        if patient:
+            user_payload["full_name"] = patient.user.full_name
+            user_payload["cellphone"] = patient.cellphone
+            user_payload["phone"] = patient.cellphone
+            user_payload["birth_date"] = patient.birth_date.isoformat()[:10] if patient.birth_date else None
+            user_payload["dateofbirth"] = user_payload["birth_date"]
+            user_payload["gender"] = patient.gender.name if hasattr(patient.gender, "name") else str(patient.gender)
+            address = db.query(AddressModel).filter(AddressModel.patient_id == patient.id).first()
+            if address:
+                user_payload["address"] = {
+                    "street": address.street or "",
+                    "number": address.number or "",
+                    "complement": address.complement or "",
+                    "neighborhood": address.neighborhood or "",
+                    "city": address.city or "",
+                    "state": address.state or "",
+                }
 
     return {
         "access_token": access_token,

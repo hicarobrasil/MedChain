@@ -75,12 +75,12 @@ class PatientView:
         db.refresh(create_patient)
 
         create_address = AddressModel(
-            street=make_password(patient.address_street),
-            number=make_password(patient.address_number),
-            complement=make_password(patient.address_complement),
-            neighborhood=make_password(patient.address_neighborhood),
-            city=make_password(patient.address_city),
-            state=make_password(patient.address_state),
+            street=patient.address_street or "",
+            number=patient.address_number or "",
+            complement=patient.address_complement or "",
+            neighborhood=patient.address_neighborhood or "",
+            city=patient.address_city or "",
+            state=patient.address_state or "",
             patient=create_patient,
         )
 

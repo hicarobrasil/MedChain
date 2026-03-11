@@ -165,24 +165,19 @@ class DoctorView:
         record_ids = [r.id for r in records]
 
         patients_with_records = len(set(r.patient_id for r in records))
-        total_patients = db.query(PatientModel).count()
-        consultations_count = db.query(ConsultationModel).filter(
-            ConsultationModel.medical_record_id.in_(record_ids)
-        ).count() if record_ids else 0
-        diagnostics_count = db.query(DiagnosticModel).filter(
-            DiagnosticModel.medical_record_id.in_(record_ids)
-        ).count() if record_ids else 0
-        certificates_count = db.query(MedicalCertificatedModel).filter(
-            MedicalCertificatedModel.medical_record_id.in_(record_ids)
-        ).count() if record_ids else 0
 
         return {
-            "patients": total_patients,
-            "patients_with_records": patients_with_records,
+            "patients": patients_with_records,
             "medical_records": len(records),
-            "consultations": consultations_count,
-            "diagnostics": diagnostics_count,
-            "certificates": certificates_count,
+            "consultations": db.query(ConsultationModel).filter(
+                ConsultationModel.medical_record_id.in_(record_ids)
+            ).count() if record_ids else 0,
+            "diagnostics": db.query(DiagnosticModel).filter(
+                DiagnosticModel.medical_record_id.in_(record_ids)
+            ).count() if record_ids else 0,
+            "certificates": db.query(MedicalCertificatedModel).filter(
+                MedicalCertificatedModel.medical_record_id.in_(record_ids)
+            ).count() if record_ids else 0,
         }
 
     @staticmethod

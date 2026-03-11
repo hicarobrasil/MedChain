@@ -8,7 +8,7 @@ from app.models.medical_record import MedicalRecordModel
 from app.models.patient import PatientModel
 from app.models.user import UserModel
 from fastapi import Body, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.orm import Session as SQLAlchemySession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -36,6 +36,7 @@ class MedicalRecordsView:
     @staticmethod
     async def get_all(
         type: Optional[MedicalRecordTypes] = None,
+        doctor_id: Optional[UUID] = None,
         db: SQLAlchemySession = Depends(get_session),
         user: User = Depends(get_user),
     ):
@@ -54,8 +55,15 @@ class MedicalRecordsView:
             )
 
         try:
+            doctor_filter = (
+                MedicalRecordModel.doctor_id == doctor_id
+                if doctor_id else true()
+            )
+
             stmt_consultation = (
                 select(ConsultationModel)
+                .join(MedicalRecordModel, ConsultationModel.medical_record_id == MedicalRecordModel.id)
+                .where(doctor_filter)
                 .options(joinedload(ConsultationModel.medical_record))
                 .options(
                     joinedload(ConsultationModel.medical_record)
@@ -76,6 +84,8 @@ class MedicalRecordsView:
 
             stmt_diagnostic = (
                 select(DiagnosticModel)
+                .join(MedicalRecordModel, DiagnosticModel.medical_record_id == MedicalRecordModel.id)
+                .where(doctor_filter)
                 .options(joinedload(DiagnosticModel.medical_record))
                 .options(
                     joinedload(DiagnosticModel.medical_record)
@@ -91,6 +101,8 @@ class MedicalRecordsView:
 
             stmt_certificate = (
                 select(MedicalCertificatedModel)
+                .join(MedicalRecordModel, MedicalCertificatedModel.medical_record_id == MedicalRecordModel.id)
+                .where(doctor_filter)
                 .options(joinedload(MedicalCertificatedModel.medical_record))
                 .options(
                     joinedload(MedicalCertificatedModel.medical_record)

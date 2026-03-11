@@ -5,7 +5,7 @@ from sqlalchemy import (
     ForeignKey,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import Base
 
 class ConsultationModel(Base):
@@ -17,8 +17,12 @@ class ConsultationModel(Base):
     history_of_present_illness: Mapped[str] = mapped_column(String, nullable=False)
     diagnosis: Mapped[str] = mapped_column(String, nullable=False)
     treatment_plan: Mapped[str] = mapped_column(String, nullable=False)
-    created_date: Mapped[datetime] = mapped_column(DateTime)
-    updated_date: Mapped[datetime] = mapped_column(DateTime)
+    created_date: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_date: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
     medical_record_id: Mapped[int] = mapped_column(ForeignKey("medical_record.id"))
     medical_record: Mapped["MedicalRecordModel"] = relationship(back_populates="consultation")
 

@@ -26,7 +26,7 @@ router.get(
 )(MedicalRecordsView.get_by_public_id)
 
 router.get(
-    "/{username}/",
+    "/patient/{username}/",
     name="get_by_patient_username",
     response_model=list,
     status_code=200,

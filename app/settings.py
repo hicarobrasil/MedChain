@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str
     EMAIL_FROM: str
 
+    # Blockchain (Solana)
+    ENABLE_BLOCKCHAIN: bool = True
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"  # Garante leitura correta de acentos no .env

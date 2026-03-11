@@ -3,9 +3,11 @@ from uuid import UUID
 import json
 from typing import Optional
 
+from app.models.doctor import DoctorModel
 from app.models.medical_record import MedicalRecordModel
+from app.models.patient import PatientModel
 from app.models.user import UserModel
-from fastapi import Depends, HTTPException, status
+from fastapi import Body, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session as SQLAlchemySession
 from sqlalchemy.orm import joinedload, selectinload
@@ -13,12 +15,19 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.auth import User, UserRole, get_user
 from app.database import get_session
 from app.medical_record.enums import MedicalRecordTypes
+from app.medical_record.serializers import (
+    serialize_consultation,
+    serialize_diagnostic,
+    serialize_medical_certificate,
+    serialize_medical_record_full,
+)
 from app.models.consultation import ConsultationModel
 from app.models.diagnostic import DiagnosticModel
 from app.models.medical_certificated import MedicalCertificatedModel
 from app.models.prescription import PrescriptionModel
 from app.models.prescription_item import PrescriptionItemModel
 from app.blockchain.solana_client import SolanaHashStorage
+from app.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +57,16 @@ class MedicalRecordsView:
             stmt_consultation = (
                 select(ConsultationModel)
                 .options(joinedload(ConsultationModel.medical_record))
-                .options(joinedload(ConsultationModel.medical_record.patient))
-                .options(joinedload(ConsultationModel.medical_record.doctor))
-                .options(joinedload(ConsultationModel.medical_record.doctor.user))
-                .options(joinedload(ConsultationModel.medical_record.patient.user))
+                .options(
+                    joinedload(ConsultationModel.medical_record)
+                    .joinedload(MedicalRecordModel.patient)
+                    .joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(ConsultationModel.medical_record)
+                    .joinedload(MedicalRecordModel.doctor)
+                    .joinedload(DoctorModel.user)
+                )
                 .options(
                     selectinload(ConsultationModel.prescription).selectinload(
                         PrescriptionModel.items
@@ -62,47 +77,58 @@ class MedicalRecordsView:
             stmt_diagnostic = (
                 select(DiagnosticModel)
                 .options(joinedload(DiagnosticModel.medical_record))
-                .options(joinedload(DiagnosticModel.medical_record.patient))
-                .options(joinedload(DiagnosticModel.medical_record.doctor))
-                .options(joinedload(DiagnosticModel.medical_record.doctor.user))
-                .options(joinedload(DiagnosticModel.medical_record.patient.user))
+                .options(
+                    joinedload(DiagnosticModel.medical_record)
+                    .joinedload(MedicalRecordModel.patient)
+                    .joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(DiagnosticModel.medical_record)
+                    .joinedload(MedicalRecordModel.doctor)
+                    .joinedload(DoctorModel.user)
+                )
             )
 
             stmt_certificate = (
                 select(MedicalCertificatedModel)
                 .options(joinedload(MedicalCertificatedModel.medical_record))
-                .options(joinedload(MedicalCertificatedModel.medical_record.patient))
-                .options(joinedload(MedicalCertificatedModel.medical_record.doctor))
                 .options(
-                    joinedload(MedicalCertificatedModel.medical_record.doctor.user)
+                    joinedload(MedicalCertificatedModel.medical_record)
+                    .joinedload(MedicalRecordModel.patient)
+                    .joinedload(PatientModel.user)
                 )
                 .options(
-                    joinedload(MedicalCertificatedModel.medical_record.patient.user)
+                    joinedload(MedicalCertificatedModel.medical_record)
+                    .joinedload(MedicalRecordModel.doctor)
+                    .joinedload(DoctorModel.user)
                 )
             )
 
             if type == MedicalRecordTypes.CONSULTATION:
-                result = await db.execute(stmt_consultation)
-                return result.scalars().all()
+                result = db.execute(stmt_consultation)
+                items = result.scalars().all()
+                return [serialize_consultation(c) for c in items]
 
             elif type == MedicalRecordTypes.DIAGNOSTIC:
-                result = await db.execute(stmt_diagnostic)
-                return result.scalars().all()
+                result = db.execute(stmt_diagnostic)
+                items = result.scalars().all()
+                return [serialize_diagnostic(d) for d in items]
 
             elif type == MedicalRecordTypes.MEDICAL_CERTIFICATE:
-                result = await db.execute(stmt_certificate)
-                return result.scalars().all()
+                result = db.execute(stmt_certificate)
+                items = result.scalars().all()
+                return [serialize_medical_certificate(c) for c in items]
 
             else:
                 # Busca todos se nenhum tipo for especificado
-                consultations = await db.execute(stmt_consultation)
-                diagnostics = await db.execute(stmt_diagnostic)
-                certificates = await db.execute(stmt_certificate)
+                consultations = db.execute(stmt_consultation).scalars().all()
+                diagnostics = db.execute(stmt_diagnostic).scalars().all()
+                certificates = db.execute(stmt_certificate).scalars().all()
 
                 return {
-                    "consultations": consultations.scalars().all(),
-                    "diagnostics": diagnostics.scalars().all(),
-                    "medical_certificates": certificates.scalars().all(),
+                    "consultations": [serialize_consultation(c) for c in consultations],
+                    "diagnostics": [serialize_diagnostic(d) for d in diagnostics],
+                    "medical_certificates": [serialize_medical_certificate(c) for c in certificates],
                 }
 
         except Exception as e:
@@ -112,15 +138,16 @@ class MedicalRecordsView:
                 detail="Erro interno do servidor.",
             )
 
+    @staticmethod
     async def post(
-        self,
-        type: MedicalRecordTypes,
-        data: dict,
+        payload: dict = Body(...),
         db: SQLAlchemySession = Depends(get_session),
         user: User = Depends(get_user),
     ):
+        type = MedicalRecordTypes(payload.get("type", "consultation"))
+        data = payload.get("data", {})
 
-        if user not in {
+        if user.role not in {
             UserRole.ADMIN,
             UserRole.DOCTOR,
         }:
@@ -135,8 +162,8 @@ class MedicalRecordsView:
 
         db.add(medical_record)
 
-        await db.commit()
-        await db.refresh(medical_record)
+        db.commit()
+        db.refresh(medical_record)
 
         record_specific_data = {}
 
@@ -153,8 +180,8 @@ class MedicalRecordsView:
                 )
 
                 db.add(consultation)
-                await db.commit()
-                await db.refresh(consultation)
+                db.commit()
+                db.refresh(consultation)
 
                 prescription_data = data.get("prescription")
                 prescription_items_list = []
@@ -162,8 +189,8 @@ class MedicalRecordsView:
                 if prescription_data:
                     prescription = PrescriptionModel(consultation_id=consultation.id)
                     db.add(prescription)
-                    await db.commit()
-                    await db.refresh(prescription)
+                    db.commit()
+                    db.refresh(prescription)
 
                     items = prescription_data.get("items", [])
                     for item in items:
@@ -183,11 +210,11 @@ class MedicalRecordsView:
                                 "treatment_duration": item.get("treatment_duration"),
                             }
                         )
-                    await db.commit()
+                    db.commit()
 
                     # Atualiza o objeto consultation para incluir a relacao recem-criada
                     # Isso garante que o retorno da API inclua a receita
-                    await db.refresh(consultation)
+                    db.refresh(consultation)
 
                 record_specific_data = {
                     "chief_complaint": consultation.chief_complaint,
@@ -201,7 +228,7 @@ class MedicalRecordsView:
             except Exception as e:
                 logger.error(f"Erro ao criar consulta: {str(e)}")
                 raise HTTPException(
-                    status_code=status.HTTP_400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Erro ao criar consulta.",
                 )
 
@@ -215,8 +242,8 @@ class MedicalRecordsView:
                     medical_record_id=medical_record.id,
                 )
                 db.add(diagnostic)
-                await db.commit()
-                await db.refresh(diagnostic)
+                db.commit()
+                db.refresh(diagnostic)
 
                 record_specific_data = {
                     "description": diagnostic.description,
@@ -227,7 +254,7 @@ class MedicalRecordsView:
             except Exception as e:
                 logger.error(f"Erro ao criar diagnostico: {str(e)}")
                 raise HTTPException(
-                    status_code=status.HTTP_400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Erro ao criar diagnostico.",
                 )
 
@@ -240,8 +267,8 @@ class MedicalRecordsView:
                     medical_record_id=medical_record.id,
                 )
                 db.add(medical_certificate)
-                await db.commit()
-                await db.refresh(medical_certificate)
+                db.commit()
+                db.refresh(medical_certificate)
 
                 record_specific_data = {
                     "purpose": medical_certificate.purpose,
@@ -251,54 +278,59 @@ class MedicalRecordsView:
             except Exception as e:
                 logger.error(f"Erro ao criar certificado medico: {str(e)}")
                 raise HTTPException(
-                    status_code=status.HTTP_400,
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Erro ao criar certificado medico.",
                 )
 
         # --- Integracao com Blockchain ---
-        try:
-            # 1. Preparar dados para hash (Metadados + Dados Especificos)
-            payload_to_hash = {
-                "record_id": str(medical_record.id),
-                "patient_id": str(medical_record.patient_id),
-                "doctor_id": str(medical_record.doctor_id),
-                "type": type.value,
-                "data": record_specific_data,
-            }
+        settings = get_settings()
+        if settings.ENABLE_BLOCKCHAIN:
+            try:
+                # 1. Preparar dados para hash (Metadados + Dados Especificos)
+                payload_to_hash = {
+                    "record_id": str(medical_record.id),
+                    "patient_id": str(medical_record.patient_id),
+                    "doctor_id": str(medical_record.doctor_id),
+                    "type": type.value,
+                    "data": record_specific_data,
+                }
 
-            # Serializa garantindo ordem das chaves para reprodutibilidade do hash
-            payload_bytes = json.dumps(payload_to_hash, sort_keys=True).encode("utf-8")
+                # Serializa garantindo ordem das chaves para reprodutibilidade do hash
+                payload_bytes = json.dumps(payload_to_hash, sort_keys=True).encode("utf-8")
 
-            # 2. Calcular Hash e Enviar para Solana
-            solana_storage = SolanaHashStorage()
-            file_hash = solana_storage.hash_file(payload_bytes)
+                # 2. Calcular Hash e Enviar para Solana
+                solana_storage = SolanaHashStorage()
+                file_hash = solana_storage.hash_file(payload_bytes)
 
-            # Envia para blockchain (Memo Program)
-            tx_id = solana_storage.store_file_hash(str(medical_record.id), file_hash)
+                # Tentar airdrop se saldo zerado (devnet)
+                try:
+                    if solana_storage.get_balance() < 0.01:
+                        solana_storage.airdrop(1.0)
+                except Exception as airdrop_err:
+                    logger.warning(f"Airdrop Solana falhou: {airdrop_err}")
 
-            # 3. Atualizar registro com Hash e TxID
-            medical_record.hash = file_hash
-            medical_record.blockchain_tx_id = (
-                tx_id  # Assumindo que o modelo tem este campo
-            )
-            await db.commit()
+                # Envia para blockchain (Memo Program)
+                tx_id = solana_storage.store_file_hash(str(medical_record.id), file_hash)
 
-        except Exception as e:
-            logger.error(f"Erro ao registrar na blockchain: {str(e)}")
-            # Nao interrompe o fluxo principal, mas loga o erro (ou poderia lancar excecao dependendo da regra de negocio)
+                if tx_id:
+                    medical_record.hash = file_hash
+                    medical_record.blockchain_tx_id = tx_id
+                    db.commit()
+            except Exception as e:
+                logger.error(f"Erro ao registrar na blockchain: {str(e)}")
 
         medical_record_public_id = str(medical_record.public_id)
         if type == MedicalRecordTypes.CONSULTATION:
-            return {"medical_record_public_id": medical_record_public_id, "consultation": consultation}
+            return {"medical_record_public_id": medical_record_public_id, "consultation": record_specific_data}
         elif type == MedicalRecordTypes.DIAGNOSTIC:
-            return {"medical_record_public_id": medical_record_public_id, "diagnostic": diagnostic}
+            return {"medical_record_public_id": medical_record_public_id, "diagnostic": record_specific_data}
         elif type == MedicalRecordTypes.MEDICAL_CERTIFICATE:
-            return {"medical_record_public_id": medical_record_public_id, "medical_certificate": medical_certificate}
+            return {"medical_record_public_id": medical_record_public_id, "medical_certificate": record_specific_data}
 
         return {"medical_record_public_id": medical_record_public_id, "message": "Registro criado", "data": record_specific_data}
 
+    @staticmethod
     async def get_by_public_id(
-        self,
         public_id: UUID,
         db: SQLAlchemySession = Depends(get_session),
         user: User = Depends(get_user),
@@ -318,12 +350,14 @@ class MedicalRecordsView:
             )
 
         try:
-            result = await db.execute(
+            result = db.execute(
                 select(MedicalRecordModel)
-                .options(joinedload(MedicalRecordModel.patient))
-                .options(joinedload(MedicalRecordModel.doctor))
-                .options(joinedload(MedicalRecordModel.doctor.user))
-                .options(joinedload(MedicalRecordModel.patient.user))
+                .options(
+                    joinedload(MedicalRecordModel.patient).joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(MedicalRecordModel.doctor).joinedload(DoctorModel.user)
+                )
                 .options(selectinload(MedicalRecordModel.consultation))
                 .options(selectinload(MedicalRecordModel.diagnostic))
                 .options(selectinload(MedicalRecordModel.certificate))
@@ -342,7 +376,7 @@ class MedicalRecordsView:
                     detail="Prontuario nao encontrado.",
                 )
 
-            return medical_record
+            return serialize_medical_record_full(medical_record)
 
         except Exception as e:
             logger.error(f"Erro ao buscar prontuario por ID: {str(e)}")
@@ -351,8 +385,8 @@ class MedicalRecordsView:
                 detail="Erro interno do servidor.",
             )
 
+    @staticmethod
     async def get_by_patient_username(
-        self,
         username: str,
         db: SQLAlchemySession = Depends(get_session),
         user: User = Depends(get_user),
@@ -372,12 +406,14 @@ class MedicalRecordsView:
             )
 
         try:
-            result = await db.execute(
+            result = db.execute(
                 select(MedicalRecordModel)
-                .options(joinedload(MedicalRecordModel.patient))
-                .options(joinedload(MedicalRecordModel.doctor))
-                .options(joinedload(MedicalRecordModel.doctor.user))
-                .options(joinedload(MedicalRecordModel.patient.user))
+                .options(
+                    joinedload(MedicalRecordModel.patient).joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(MedicalRecordModel.doctor).joinedload(DoctorModel.user)
+                )
                 .options(selectinload(MedicalRecordModel.consultation))
                 .options(selectinload(MedicalRecordModel.diagnostic))
                 .options(selectinload(MedicalRecordModel.certificate))
@@ -390,7 +426,7 @@ class MedicalRecordsView:
             )
             medical_records = result.scalars().all()
 
-            return medical_records
+            return [serialize_medical_record_full(mr) for mr in medical_records]
 
         except Exception as e:
             logger.error(

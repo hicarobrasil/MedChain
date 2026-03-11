@@ -10,6 +10,7 @@ from app.doctor.schemas import DoctorIn
 from app.models.doctor import DoctorModel, SpecialtyEnum
 from app.models.user import StatusEnum
 from app.models.user import UserModel
+from app.models.doctor_patient import DoctorPatientModel
 from app.models.medical_record import MedicalRecordModel
 from app.models.consultation import ConsultationModel
 from app.models.diagnostic import DiagnosticModel
@@ -217,10 +218,14 @@ class DoctorView:
                 detail="Medico nao encontrado",
             )
 
-        patient_ids = db.query(MedicalRecordModel.patient_id).filter(
+        # Pacientes vinculados ao medico (doctor_patient ou medical_record para retrocompatibilidade)
+        dp_ids = {r[0] for r in db.query(DoctorPatientModel.patient_id).filter(
+            DoctorPatientModel.doctor_id == doctor_id
+        ).distinct().all() if r[0]}
+        mr_ids = {r[0] for r in db.query(MedicalRecordModel.patient_id).filter(
             MedicalRecordModel.doctor_id == doctor_id
-        ).distinct().all()
-        patient_ids = [pid[0] for pid in patient_ids if pid[0]]
+        ).distinct().all() if r[0]}
+        patient_ids = list(dp_ids | mr_ids)
 
         if not patient_ids:
             return []

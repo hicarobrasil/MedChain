@@ -58,6 +58,7 @@ def init_db() -> None:
         address,
         consultation,
         doctor,
+        doctor_patient,
         file,
         login_record,
         medical_record,

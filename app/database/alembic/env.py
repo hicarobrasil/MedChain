@@ -22,6 +22,7 @@ from app.models.user import UserModel  # noqa
 from app.models.address import AddressModel  # noqa
 from app.models.file import FileModel  # noqa
 from app.models.medical_record import MedicalRecordModel  # noqa
+from app.models.doctor_patient import DoctorPatientModel  # noqa
 from app.models.login_record import User  # noqa
 
 # add your model's MetaData object here

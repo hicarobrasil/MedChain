@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from app.auth import User, UserRole, get_user
@@ -13,7 +14,7 @@ from app.database import get_session
 from app.errors import UserAlreadyExists
 from app.models.address import AddressModel
 from app.models.doctor import DoctorModel
-from app.models.medical_record import MedicalRecordModel
+from app.models.doctor_patient import DoctorPatientModel
 from app.models.patient import GenderEnum, PatientModel
 from app.models.user import StatusEnum
 from app.models.user import UserModel
@@ -44,71 +45,94 @@ class PatientView:
         if user_svc.user_exists(patient.email, db):
             raise UserAlreadyExists()
 
-        auth_user = user_svc.create_user(
-            UserCreateModel(
-                username=patient.email,
-                email=patient.email,
-                password=patient.password,
-            ),
-            db,
-        )
-        user_svc.update_user(auth_user, {"role": "patient", "is_verified": True}, db)
-
-        user_created = UserModel(
-            full_name=patient.name,
-            email=patient.email,
-            password=make_password(patient.password),
-            status=StatusEnum.ACTIVE,
-        )
-        db.add(user_created)
-        db.commit()
-        db.refresh(user_created)
-
-        create_patient = PatientModel(
-            cellphone=patient.phone,
-            birth_date=patient.dateofbirth,
-            gender=GenderEnum(patient.gender),
-            user=user_created,
-        )
-        db.add(create_patient)
-        db.commit()
-        db.refresh(create_patient)
-
-        create_address = AddressModel(
-            street=patient.address_street or "",
-            number=patient.address_number or "",
-            complement=patient.address_complement or "",
-            neighborhood=patient.address_neighborhood or "",
-            city=patient.address_city or "",
-            state=patient.address_state or "",
-            patient=create_patient,
-        )
-
-        db.add(create_address)
-        db.commit()
-        db.refresh(create_address)
-
-        # Vincula o paciente ao medico que o criou (prontuario inicial) para aparecer na listagem
-        if user.role == UserRole.DOCTOR:
-            doctor = (
-                db.query(DoctorModel)
-                .join(UserModel, DoctorModel.user_id == UserModel.id)
-                .filter(UserModel.email == user.email)
-                .first()
+        if db.query(PatientModel).filter(PatientModel.cellphone == patient.phone).first():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Telefone ja cadastrado para outro paciente.",
             )
-            if doctor:
-                medical_record = MedicalRecordModel(
-                    doctor_id=doctor.public_id,
-                    patient_id=create_patient.public_id,
-                )
-                db.add(medical_record)
-                db.commit()
 
-        return {
-            "uid": str(user_created.public_id),
-            "patient_public_id": str(create_patient.public_id),
-            "message": "Paciente criado com sucesso",
-        }
+        try:
+            auth_user = user_svc.create_user(
+                UserCreateModel(
+                    username=patient.email,
+                    email=patient.email,
+                    password=patient.password,
+                ),
+                db,
+            )
+            user_svc.update_user(auth_user, {"role": "patient", "is_verified": True}, db)
+
+            user_created = UserModel(
+                full_name=patient.name,
+                email=patient.email,
+                password=make_password(patient.password),
+                status=StatusEnum.ACTIVE,
+            )
+            db.add(user_created)
+            db.commit()
+            db.refresh(user_created)
+
+            create_patient = PatientModel(
+                cellphone=patient.phone,
+                birth_date=patient.dateofbirth,
+                gender=GenderEnum(patient.gender),
+                user=user_created,
+            )
+            db.add(create_patient)
+            db.commit()
+            db.refresh(create_patient)
+
+            create_address = AddressModel(
+                street=patient.address_street or "",
+                number=patient.address_number or "",
+                complement=patient.address_complement or "",
+                neighborhood=patient.address_neighborhood or "",
+                city=patient.address_city or "",
+                state=patient.address_state or "",
+                patient=create_patient,
+            )
+            db.add(create_address)
+            db.commit()
+            db.refresh(create_address)
+
+            # Vincula o paciente ao medico que o criou para aparecer na listagem (sem criar prontuario vazio)
+            if user.role == UserRole.DOCTOR:
+                doctor = (
+                    db.query(DoctorModel)
+                    .join(UserModel, DoctorModel.user_id == UserModel.id)
+                    .filter(UserModel.email == user.email)
+                    .first()
+                )
+                if doctor:
+                    link = DoctorPatientModel(
+                        doctor_id=doctor.public_id,
+                        patient_id=create_patient.public_id,
+                    )
+                    db.add(link)
+                    db.commit()
+
+            return {
+                "uid": str(user_created.public_id),
+                "patient_public_id": str(create_patient.public_id),
+                "message": "Paciente criado com sucesso",
+            }
+        except IntegrityError as e:
+            db.rollback()
+            err_msg = str(e.orig) if e.orig else str(e)
+            if "cellphone" in err_msg.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Telefone ja cadastrado para outro paciente.",
+                )
+            if "email" in err_msg.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="E-mail ja cadastrado.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Dados duplicados. Verifique e-mail e telefone.",
+            )
 
     @staticmethod
     async def get(

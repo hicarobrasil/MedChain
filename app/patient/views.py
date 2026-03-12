@@ -216,8 +216,13 @@ class PatientView:
             .join(UserModel, PatientModel.user_id == UserModel.id)
             .all()
         )
-        return [
-            {
+        result = []
+        for patient in patients:
+            address = (
+                db.query(AddressModel).filter(AddressModel.patient_id == patient.id).first()
+                if patient else None
+            )
+            result.append({
                 "uid": str(patient.user.public_id),
                 "id": str(patient.user.public_id),
                 "patient_public_id": str(patient.public_id),
@@ -230,9 +235,18 @@ class PatientView:
                 "birth_date": patient.birth_date.isoformat() if patient.birth_date else None,
                 "gender": patient.gender.value if hasattr(patient.gender, "value") else patient.gender,
                 "status": patient.user.status.value if hasattr(patient.user.status, "value") else str(patient.user.status),
-            }
-            for patient in patients
-        ]
+                "date_created": patient.user.created_date,
+                "created_at": patient.user.created_date,
+                "address": {
+                    "street": address.street if address else "",
+                    "number": address.number if address else "",
+                    "complement": address.complement if address else "",
+                    "neighborhood": address.neighborhood if address else "",
+                    "city": address.city if address else "",
+                    "state": address.state if address else "",
+                } if address else {},
+            })
+        return result
 
     @staticmethod
     async def put(

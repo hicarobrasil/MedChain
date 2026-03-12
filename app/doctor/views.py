@@ -10,6 +10,7 @@ from app.doctor.schemas import DoctorIn
 from app.models.doctor import DoctorModel, SpecialtyEnum
 from app.models.user import StatusEnum
 from app.models.user import UserModel
+from app.models.address import AddressModel
 from app.models.doctor_patient import DoctorPatientModel
 from app.models.medical_record import MedicalRecordModel
 from app.models.consultation import ConsultationModel
@@ -234,8 +235,10 @@ class DoctorView:
             PatientModel.public_id.in_(patient_ids)
         ).all()
 
-        return [
-            {
+        result = []
+        for p in patients:
+            address = db.query(AddressModel).filter(AddressModel.patient_id == p.id).first()
+            result.append({
                 "uid": str(p.user.public_id),
                 "id": str(p.user.public_id),
                 "patient_public_id": str(p.public_id),
@@ -248,6 +251,15 @@ class DoctorView:
                 "birth_date": p.birth_date.isoformat() if p.birth_date else None,
                 "gender": p.gender.value if hasattr(p.gender, "value") else str(p.gender),
                 "status": p.user.status.value if hasattr(p.user.status, "value") else str(p.user.status),
-            }
-            for p in patients
-        ]
+                "date_created": p.user.created_date,
+                "created_at": p.user.created_date,
+                "address": {
+                    "street": address.street if address else "",
+                    "number": address.number if address else "",
+                    "complement": address.complement if address else "",
+                    "neighborhood": address.neighborhood if address else "",
+                    "city": address.city if address else "",
+                    "state": address.state if address else "",
+                } if address else {},
+            })
+        return result

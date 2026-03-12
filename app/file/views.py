@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import uuid
@@ -156,3 +157,59 @@ class FileView:
             "patient_uid": file_record.patient_uid,
             "doctor_uid": file_record.doctor_uid,
         }
+
+    @staticmethod
+    async def get_all_files_by_patient(
+        patient_uid: UUID,
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario nao autenticado.",
+            )
+
+        if user.role not in [UserRole.DOCTOR, UserRole.ADMIN]:
+            stmt_user = select(UserModel).where(UserModel.email == user.email)
+            result_user = await db.execute(stmt_user)
+            user_db = result_user.scalar_one_or_none()
+
+            if not user_db or user_db.uid != patient_uid:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Permissao negada."
+                )
+
+        stmt = select(FileModel).where(FileModel.patient_uid == patient_uid)
+        result = await db.execute(stmt)
+        files = result.scalars().all()
+        for file in files:
+            try:
+                with open(file.url, "rb") as f:
+                    encrypted_content = f.read()
+                key = os.getenv("MEDICAL_RECORDS_API_CRYPTO_KEY")
+                if not key:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Chave de criptografia nao configurada.",
+                    )
+                fernet = Fernet(key.encode())
+                decrypted_content = fernet.decrypt(encrypted_content)
+                file.decrypted_content = base64.b64encode(decrypted_content).decode('utf-8')
+            except Exception as e:
+                logger.error(f"Erro ao descriptografar arquivo {file.id}: {e}")
+                file.decrypted_content = None
+
+        return [
+            {
+                "id": file.id,
+                "url": file.url,
+                "format": file.format,
+                "content": file.decrypted_content,
+                "description": file.description,
+                "hash": file.hash,
+                "patient_uid": file.patient_uid,
+                "doctor_uid": file.doctor_uid,
+            }
+            for file in files
+        ]

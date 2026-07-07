@@ -5,7 +5,6 @@ import uuid
 from typing import Optional
 from uuid import UUID
 
-from cryptography.fernet import Fernet
 from fastapi import UploadFile, File, Depends, HTTPException, status, Form
 from sqlalchemy import select
 from sqlalchemy.orm import Session as SQLAlchemySession
@@ -16,6 +15,7 @@ from app.database import get_session
 from app.models.doctor import DoctorModel
 from app.models.file import FileModel
 from app.models.user import UserModel
+from app.storage.aws_client import S3Client
 
 logger = logging.getLogger(__name__)
 
@@ -75,29 +75,18 @@ class FileView:
             solana_storage = SolanaHashStorage()
             file_hash = solana_storage.hash_file(content)
 
-            upload_dir = "uploads"
-            os.makedirs(upload_dir, exist_ok=True)
             file_ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
             filename = f"{uuid.uuid4()}.{file_ext}"
-            file_path = os.path.join(upload_dir, filename)
 
-            # Criptografar o conteudo antes de salvar
-            key = os.getenv("MEDICAL_RECORDS_API_CRYPTO_KEY")
-            if not key:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Chave de criptografia nao configurada.",
-                )
-            fernet = Fernet(key.encode())
-            encrypted_content = fernet.encrypt(content)
-
-            with open(file_path, "wb") as f:
-                f.write(encrypted_content)
+            # Fazer upload para o S3
+            await file.seek(0)
+            s3_client = S3Client()
+            file_url, _ = s3_client.upload_file(file, filename)
 
             doctor_ref = getattr(doctor, "public_id", doctor.id)
 
             new_file = FileModel(
-                url=file_path,
+                url=file_url,
                 format=file_type,
                 description=description,
                 hash=file_hash,
@@ -185,16 +174,10 @@ class FileView:
         files = result.scalars().all()
         for file in files:
             try:
-                with open(file.url, "rb") as f:
-                    encrypted_content = f.read()
-                key = os.getenv("MEDICAL_RECORDS_API_CRYPTO_KEY")
-                if not key:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Chave de criptografia nao configurada.",
-                    )
-                fernet = Fernet(key.encode())
-                decrypted_content = fernet.decrypt(encrypted_content)
+                s3_client = S3Client()
+                s3_key = file.url.split("/")[-1]
+                decrypted_file = s3_client.download_file(s3_key)
+                decrypted_content = decrypted_file.file.read()
                 file.decrypted_content = base64.b64encode(decrypted_content).decode('utf-8')
             except Exception as e:
                 logger.error(f"Erro ao descriptografar arquivo {file.id}: {e}")

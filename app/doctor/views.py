@@ -80,9 +80,6 @@ class DoctorView:
             password=cryptography_password,
             status=StatusEnum.ACTIVE,
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
 
         doctor = DoctorModel(
             CRM=doctor_data.CRM,
@@ -90,6 +87,7 @@ class DoctorView:
             user=user,
         )
 
+        db.add(user)
         db.add(doctor)
         db.commit()
         db.refresh(doctor)

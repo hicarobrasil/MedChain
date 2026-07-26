@@ -1,6 +1,7 @@
 import logging
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -170,6 +171,7 @@ class FileView:
                 format=file_type,
                 description=desc,
                 hash=file_hash,
+                created_date=datetime.now(timezone.utc),
                 patient_uid=patient_uid,
                 doctor_uid=doctor_ref,
             )
@@ -191,6 +193,7 @@ class FileView:
                 "hash": new_file.hash,
                 "format": new_file.format,
                 "description": new_file.description,
+                "created_date": new_file.created_date.isoformat() if new_file.created_date else None,
                 "patient_uid": str(new_file.patient_uid),
                 "doctor_uid": str(new_file.doctor_uid),
             }
@@ -240,6 +243,7 @@ class FileView:
                 "format": f.format,
                 "description": f.description,
                 "hash": f.hash,
+                "created_date": f.created_date.isoformat() if getattr(f, "created_date", None) else None,
                 "patient_uid": str(f.patient_uid),
                 "doctor_uid": str(f.doctor_uid),
             }
@@ -273,6 +277,7 @@ class FileView:
             "format": file_record.format,
             "description": file_record.description,
             "hash": file_record.hash,
+            "created_date": file_record.created_date.isoformat() if getattr(file_record, "created_date", None) else None,
             "patient_uid": str(file_record.patient_uid),
             "doctor_uid": str(file_record.doctor_uid),
         }

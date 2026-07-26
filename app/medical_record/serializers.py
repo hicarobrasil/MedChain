@@ -121,6 +121,8 @@ def serialize_medical_certificate(certificate) -> dict:
         "id": certificate.id,
         "purpose": certificate.purpose,
         "period_of_leave": certificate.period_of_leave,
+        "created_date": certificate.created_date.isoformat() if certificate.created_date else None,
+        "updated_date": certificate.updated_date.isoformat() if certificate.updated_date else None,
         "medical_record_id": certificate.medical_record_id,
         "medical_record": serialize_medical_record_with_relations(medical_record) if medical_record else None,
     }

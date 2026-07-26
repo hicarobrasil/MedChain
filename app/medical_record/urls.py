@@ -25,6 +25,13 @@ router.get(
     status_code=200,
 )(MedicalRecordsView.get_by_public_id)
 
+router.post(
+    "/{public_id}/verify/",
+    name="verify_medical_record_integrity",
+    response_model=dict,
+    status_code=200,
+)(MedicalRecordsView.verify_integrity)
+
 router.get(
     "/patient/{username}/",
     name="get_by_patient_username",

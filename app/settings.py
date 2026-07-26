@@ -34,10 +34,11 @@ class Settings(BaseSettings):
     REDIS_URL: str
     REDIS_PASSWORD: Optional[str] = None
 
-    # Amazon S3
+    # Amazon S3 / arquivos
     MEDICAL_RECORDS_API_AMAZON_S3_ACCESS_KEY_ID: str
     MEDICAL_RECORDS_API_AMAZON_S3_SECRET_ACCESS_KEY: str
     MEDICAL_RECORDS_API_AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID: str
+    MEDICAL_RECORDS_API_CRYPTO_KEY: Optional[str] = None
 
     # E-mail
     SMTP_SERVER: str

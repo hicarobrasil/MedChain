@@ -9,6 +9,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from fastapi import UploadFile, File, Depends, HTTPException, status, Form
 from fastapi.responses import Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from app.auth import User, UserRole, get_user
@@ -27,6 +28,16 @@ from app.models.user import UserModel
 from app.settings import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_unlink(path: Optional[str]) -> None:
+    if not path:
+        return
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError as exc:
+        logger.warning("Falha ao remover arquivo temporario %s: %s", path, exc)
 
 
 def _get_fernet() -> Fernet:
@@ -174,15 +185,38 @@ class FileView:
                 detail="Acesso negado a este paciente.",
             )
 
+        file_path = None
         try:
             content = await file.read()
+            if not content:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Arquivo vazio nao permitido.",
+                )
 
             solana_storage = SolanaHashStorage()
             file_hash = solana_storage.hash_file(content)
 
+            # Unique em files.hash: falha previsível com 409 (não 500).
+            existing = db.execute(
+                select(FileModel.id).where(FileModel.hash == file_hash).limit(1)
+            ).scalar_one_or_none()
+            if existing is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Este arquivo ja foi enviado anteriormente "
+                        "(conteudo identico detectado pelo hash)."
+                    ),
+                )
+
             upload_dir = "uploads"
             os.makedirs(upload_dir, exist_ok=True)
-            file_ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "bin"
+            file_ext = (
+                file.filename.split(".")[-1]
+                if file.filename and "." in file.filename
+                else "bin"
+            )
             filename = f"{uuid.uuid4()}.{file_ext}"
             file_path = os.path.join(upload_dir, filename)
 
@@ -205,9 +239,21 @@ class FileView:
                 doctor_uid=doctor_ref,
             )
 
-            db.add(new_file)
-            db.commit()
-            db.refresh(new_file)
+            try:
+                db.add(new_file)
+                db.commit()
+                db.refresh(new_file)
+            except IntegrityError:
+                db.rollback()
+                _safe_unlink(file_path)
+                file_path = None
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Este arquivo ja foi enviado anteriormente "
+                        "(conteudo identico detectado pelo hash)."
+                    ),
+                )
 
             try:
                 tx_id = solana_storage.store_file_hash(str(new_file.id), file_hash)
@@ -231,6 +277,7 @@ class FileView:
             raise
         except Exception as e:
             db.rollback()
+            _safe_unlink(file_path)
             logger.error(f"Erro no upload: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -54,6 +54,8 @@ get_db = get_session  # alias para compatibilidade
 
 def init_db() -> None:
     """Cria as tabelas no banco de dados. Importa os models para registra-los no Base."""
+    from sqlalchemy import text
+
     from app.models import (  # noqa: F401
         address,
         consultation,
@@ -69,6 +71,16 @@ def init_db() -> None:
     )
 
     Base.metadata.create_all(bind=engine)
+
+    # create_all nao altera tabelas existentes — garante coluna de ancora dos arquivos.
+    insp = inspect(engine)
+    if insp.has_table("files"):
+        cols = {c["name"] for c in insp.get_columns("files")}
+        if "blockchain_tx_id" not in cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE files ADD COLUMN blockchain_tx_id VARCHAR")
+                )
 
 
 class Base(DeclarativeBase):

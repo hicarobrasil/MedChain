@@ -40,6 +40,26 @@ def _safe_unlink(path: Optional[str]) -> None:
         logger.warning("Falha ao remover arquivo temporario %s: %s", path, exc)
 
 
+def _serialize_file(file_record: FileModel) -> dict:
+    tx_id = getattr(file_record, "blockchain_tx_id", None)
+    return {
+        "id": file_record.id,
+        "url": file_record.url,
+        "format": file_record.format,
+        "description": file_record.description,
+        "hash": file_record.hash,
+        "blockchain_tx_id": tx_id,
+        "anchored": bool(file_record.hash and tx_id),
+        "created_date": (
+            file_record.created_date.isoformat()
+            if getattr(file_record, "created_date", None)
+            else None
+        ),
+        "patient_uid": str(file_record.patient_uid),
+        "doctor_uid": str(file_record.doctor_uid),
+    }
+
+
 def _get_fernet() -> Fernet:
     key = get_settings().MEDICAL_RECORDS_API_CRYPTO_KEY or os.getenv(
         "MEDICAL_RECORDS_API_CRYPTO_KEY"
@@ -257,20 +277,16 @@ class FileView:
 
             try:
                 tx_id = solana_storage.store_file_hash(str(new_file.id), file_hash)
+                new_file.blockchain_tx_id = tx_id
+                db.commit()
+                db.refresh(new_file)
                 logger.info(f"Arquivo registrado na blockchain. TxID: {tx_id}")
             except Exception as e:
                 logger.error(f"Erro ao registrar na blockchain: {e}")
 
             return {
                 "message": "Arquivo enviado com sucesso",
-                "id": new_file.id,
-                "url": new_file.url,
-                "hash": new_file.hash,
-                "format": new_file.format,
-                "description": new_file.description,
-                "created_date": new_file.created_date.isoformat() if new_file.created_date else None,
-                "patient_uid": str(new_file.patient_uid),
-                "doctor_uid": str(new_file.doctor_uid),
+                **_serialize_file(new_file),
             }
 
         except HTTPException:
@@ -320,19 +336,7 @@ class FileView:
             select(FileModel).where(FileModel.patient_uid == patient_uid)
         ).scalars().all()
 
-        return [
-            {
-                "id": f.id,
-                "url": f.url,
-                "format": f.format,
-                "description": f.description,
-                "hash": f.hash,
-                "created_date": f.created_date.isoformat() if getattr(f, "created_date", None) else None,
-                "patient_uid": str(f.patient_uid),
-                "doctor_uid": str(f.doctor_uid),
-            }
-            for f in files
-        ]
+        return [_serialize_file(f) for f in files]
 
     @staticmethod
     async def get_file(
@@ -355,16 +359,7 @@ class FileView:
 
         _assert_file_access(db, user, file_record)
 
-        return {
-            "id": file_record.id,
-            "url": file_record.url,
-            "format": file_record.format,
-            "description": file_record.description,
-            "hash": file_record.hash,
-            "created_date": file_record.created_date.isoformat() if getattr(file_record, "created_date", None) else None,
-            "patient_uid": str(file_record.patient_uid),
-            "doctor_uid": str(file_record.doctor_uid),
-        }
+        return _serialize_file(file_record)
 
     @staticmethod
     async def download_file(

@@ -20,6 +20,7 @@ class FileModel(Base):
     format: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    blockchain_tx_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_date: Mapped[datetime | None] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=True
     )

@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from app.auth import User, UserRole, get_user
+from app.auth.access import assert_doctor_owns_doctor_id, linked_patient_public_ids
 from app.auth.utils import make_password
 from app.database import get_session
 from app.doctor.schemas import DoctorIn
@@ -156,20 +157,15 @@ class DoctorView:
                 detail="Acesso negado",
             )
 
-        doctor = db.query(DoctorModel).filter(DoctorModel.public_id == doctor_id).first()
-        if not doctor:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Medico nao encontrado",
-            )
+        assert_doctor_owns_doctor_id(db, user, doctor_id)
 
         records = db.query(MedicalRecordModel).filter(MedicalRecordModel.doctor_id == doctor_id).all()
         record_ids = [r.id for r in records]
 
-        patients_with_records = len(set(r.patient_id for r in records))
+        linked_patients = linked_patient_public_ids(db, doctor_id)
 
         return {
-            "patients": patients_with_records,
+            "patients": len(linked_patients),
             "medical_records": len(records),
             "consultations": db.query(ConsultationModel).filter(
                 ConsultationModel.medical_record_id.in_(record_ids)

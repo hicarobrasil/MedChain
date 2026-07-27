@@ -20,11 +20,25 @@ class RedisClient:
     def _get_connection(self):
         """Obtem uma conexao Redis ou reutiliza a existente"""
         if self._redis is None:
-            try:
-                self._redis = redis.from_url(self.redis_url, decode_responses=True)
-            except Exception as e:
-                logging.error(f"Erro ao conectar ao Redis: {e}")
-                return None
+            urls = [self.redis_url]
+            # Ambiente local (uvicorn fora do Docker): hostname "redis" nao resolve
+            if self.redis_url and ("@redis:" in self.redis_url or "://redis:" in self.redis_url):
+                urls.append(
+                    self.redis_url.replace("@redis:", "@localhost:").replace("://redis:", "://localhost:")
+                )
+            last_err = None
+            for url in urls:
+                try:
+                    client = redis.from_url(url, decode_responses=True, socket_connect_timeout=1)
+                    client.ping()
+                    self._redis = client
+                    self.redis_url = url
+                    return self._redis
+                except Exception as e:
+                    last_err = e
+                    continue
+            logging.error(f"Erro ao conectar ao Redis: {last_err}")
+            return None
         return self._redis
 
     def add_token_to_blacklist(self, jti: str, ttl: int) -> bool:

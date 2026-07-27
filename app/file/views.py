@@ -12,6 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from app.auth import User, UserRole, get_user
+from app.auth.access import (
+    assert_doctor_patient_access,
+    doctor_has_patient_access,
+    resolve_doctor,
+    resolve_patient_by_uid_or_public_id,
+)
 from app.blockchain.solana_client import SolanaHashStorage
 from app.database import get_session
 from app.models.doctor import DoctorModel
@@ -48,8 +54,15 @@ def _resolve_patient_public_id(db: SQLAlchemySession, user: User) -> Optional[UU
 
 
 def _assert_file_access(db: SQLAlchemySession, user: User, file_record: FileModel) -> None:
-    if user.role in {UserRole.ADMIN, UserRole.DOCTOR}:
+    if user.role == UserRole.ADMIN:
         return
+    if user.role == UserRole.DOCTOR:
+        doctor = resolve_doctor(db, user)
+        if doctor and str(doctor.public_id) == str(file_record.doctor_uid):
+            return
+        if doctor and doctor_has_patient_access(db, doctor.public_id, file_record.patient_uid):
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
     if user.role == UserRole.PATIENT:
         patient_id = _resolve_patient_public_id(db, user)
         if patient_id and str(patient_id) == str(file_record.patient_uid):
@@ -145,6 +158,22 @@ class FileView:
                 detail="Apenas medicos cadastrados podem enviar arquivos.",
             )
 
+        patient = resolve_patient_by_uid_or_public_id(db, patient_uid)
+        if not patient:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Paciente nao encontrado.",
+            )
+        patient_uid = patient.public_id
+
+        if user.role == UserRole.DOCTOR and not doctor_has_patient_access(
+            db, doctor.public_id, patient_uid
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso negado a este paciente.",
+            )
+
         try:
             content = await file.read()
 
@@ -231,6 +260,14 @@ class FileView:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado."
                 )
+        elif user.role == UserRole.DOCTOR:
+            patient = resolve_patient_by_uid_or_public_id(db, patient_uid)
+            if not patient:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Paciente nao encontrado."
+                )
+            assert_doctor_patient_access(db, user, patient.public_id)
+            patient_uid = patient.public_id
 
         files = db.execute(
             select(FileModel).where(FileModel.patient_uid == patient_uid)

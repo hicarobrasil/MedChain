@@ -243,8 +243,12 @@ def verify_user_account(token: str, db: Session = Depends(get_db)):
     return {"message": "Conta verificada com sucesso"}
 
 @auth_router.post("/verify-account/{email}", status_code=status.HTTP_200_OK)
-def verify_account_manual(email: str, db: Session = Depends(get_db)):
-    """Verifica a conta do usuario manualmente (apenas para testes)"""
+def verify_account_manual(
+    email: str,
+    db: Session = Depends(get_db),
+    _: bool = Depends(admin_role),
+):
+    """Verifica a conta do usuario manualmente (apenas admin)."""
     user = user_service.get_user_by_email(email, db)
     
     if not user:
@@ -259,10 +263,13 @@ def verify_account_manual(email: str, db: Session = Depends(get_db)):
 
 
 @auth_router.get("/fix-doctor-roles", status_code=status.HTTP_200_OK)
-def fix_doctor_roles(db: Session = Depends(get_db)):
+def fix_doctor_roles(
+    db: Session = Depends(get_db),
+    _: bool = Depends(admin_role),
+):
     """
     Corrige role em auth_users: define role='doctor' para emails que têm DoctorModel.
-    Chame: GET /api/v1/auth/fix-doctor-roles
+    Apenas admin.
     """
     updated = []
     for doctor in db.query(DoctorModel).join(UserModel, DoctorModel.user_id == UserModel.id).all():
@@ -278,12 +285,13 @@ def fix_doctor_roles(db: Session = Depends(get_db)):
 def complete_doctor_registration(data: DoctorCompleteModel, db: Session = Depends(get_db)):
     """
     Completa cadastro de médico quando o usuário já existe em auth_users mas não tem UserModel/DoctorModel.
-    Cria users + doctor e atualiza auth_users.role para 'doctor'.
-    POST /api/v1/auth/complete-doctor com body: {"email":"...","full_name":"...","CRM":"...","specialty":"..."}
+    Exige a senha da conta existente para impedir takeover.
     """
     auth_user = user_service.get_user_by_email(data.email, db)
     if not auth_user:
         raise UserNotFound()
+    if not verify_password(data.password, auth_user.password_hash):
+        raise InvalidCredentials()
     app_user = db.query(UserModel).filter(func.lower(UserModel.email) == data.email.lower()).first()
     if app_user:
         doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first()
@@ -301,7 +309,7 @@ def complete_doctor_registration(data: DoctorCompleteModel, db: Session = Depend
     app_user = UserModel(
         full_name=data.full_name,
         email=data.email,
-        password=make_password("temp"),  # não usado para login
+        password=make_password(data.password),
         status=StatusEnum.ACTIVE,
     )
     db.add(app_user)
@@ -316,13 +324,24 @@ def complete_doctor_registration(data: DoctorCompleteModel, db: Session = Depend
 
 
 @auth_router.get("/check-role", status_code=status.HTTP_200_OK)
-def check_user_role(email: str, db: Session = Depends(get_db)):
+def check_user_role(
+    email: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Diagnóstico: verifica auth_users, users, doctor para um email.
-    Chame: GET /api/v1/auth/check-role?email=dinizkaroline1@gmail.com
+    Admin pode consultar qualquer email; demais usuarios so o proprio.
     """
     email = (email or "").strip()
     email_lower = email.lower()
+    requester_email = (current_user.email or "").lower()
+    requester_role = (getattr(current_user, "role", None) or "").lower()
+    if requester_role != "admin" and email_lower != requester_email:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado.",
+        )
     auth_user = user_service.get_user_by_email(email, db) or user_service.get_user_by_email(email_lower, db)
     app_user = db.query(UserModel).filter(func.lower(UserModel.email) == email_lower).first()
     doctor = db.query(DoctorModel).filter(DoctorModel.user_id == app_user.id).first() if app_user else None

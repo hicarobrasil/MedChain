@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session as SQLAlchemySession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.auth import User, UserRole, get_user
+from app.auth.access import (
+    doctor_has_patient_access,
+    ensure_doctor_patient_link,
+    resolve_doctor,
+)
 from app.database import get_session
 from app.medical_record.enums import MedicalRecordTypes
 from app.medical_record.serializers import (
@@ -97,8 +102,13 @@ def _build_record_hash_payload(medical_record: MedicalRecordModel) -> tuple[str,
 
 
 def _ensure_record_access(db: SQLAlchemySession, user: User, medical_record: MedicalRecordModel) -> None:
-    if user.role in {UserRole.ADMIN, UserRole.DOCTOR}:
+    if user.role == UserRole.ADMIN:
         return
+    if user.role == UserRole.DOCTOR:
+        doctor = resolve_doctor(db, user)
+        if doctor and str(doctor.public_id) == str(medical_record.doctor_id):
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
     if user.role == UserRole.PATIENT:
         patient_id = _resolve_patient_public_id(db, user)
         if patient_id and str(patient_id) == str(medical_record.patient_id):
@@ -140,11 +150,24 @@ class MedicalRecordsView:
                     )
                 patient_filter = MedicalRecordModel.patient_id == patient_id
 
-            doctor_filter = (
-                MedicalRecordModel.doctor_id == doctor_id
-                if doctor_id and user.role != UserRole.PATIENT
-                else true()
-            )
+            if user.role == UserRole.DOCTOR:
+                doctor = resolve_doctor(db, user)
+                if not doctor:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Perfil de medico nao encontrado.",
+                    )
+                if doctor_id and str(doctor_id) != str(doctor.public_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Acesso negado aos prontuarios de outro medico.",
+                    )
+                doctor_filter = MedicalRecordModel.doctor_id == doctor.public_id
+            elif doctor_id and user.role == UserRole.ADMIN:
+                doctor_filter = MedicalRecordModel.doctor_id == doctor_id
+            else:
+                doctor_filter = true()
+
             access_filter = and_(doctor_filter, patient_filter)
 
             stmt_consultation = (
@@ -230,6 +253,8 @@ class MedicalRecordsView:
                     "medical_certificates": [serialize_medical_certificate(c) for c in certificates],
                 }
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Erro ao listar prontuarios: {str(e)}")
             raise HTTPException(
@@ -254,15 +279,58 @@ class MedicalRecordsView:
                 status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado."
             )
 
+        raw_doctor_id = data.get("doctor_id")
+        raw_patient_id = data.get("patient_id")
+        if not raw_doctor_id or not raw_patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="doctor_id e patient_id sao obrigatorios.",
+            )
+
+        try:
+            doctor_uuid = UUID(str(raw_doctor_id))
+            patient_uuid = UUID(str(raw_patient_id))
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="doctor_id ou patient_id invalidos.",
+            )
+
+        doctor_row = db.query(DoctorModel).filter(DoctorModel.public_id == doctor_uuid).first()
+        patient_row = db.query(PatientModel).filter(PatientModel.public_id == patient_uuid).first()
+        if not doctor_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico nao encontrado.")
+        if not patient_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente nao encontrado.")
+
+        if user.role == UserRole.DOCTOR:
+            logged_doctor = resolve_doctor(db, user)
+            if not logged_doctor or str(logged_doctor.public_id) != str(doctor_uuid):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Nao e permitido criar prontuario em nome de outro medico.",
+                )
+            if not doctor_has_patient_access(db, logged_doctor.public_id, patient_uuid):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Acesso negado a este paciente.",
+                )
+
         medical_record = MedicalRecordModel(
-            doctor_id=data.get("doctor_id"),
-            patient_id=data.get("patient_id"),
+            doctor_id=doctor_uuid,
+            patient_id=patient_uuid,
         )
 
         db.add(medical_record)
 
         db.commit()
         db.refresh(medical_record)
+
+        # Garante vinculo para listagens futuras
+        try:
+            ensure_doctor_patient_link(db, doctor_uuid, patient_uuid)
+        except Exception as link_err:
+            logger.warning("Falha ao garantir vinculo doctor_patient: %s", link_err)
 
         record_specific_data = {}
 

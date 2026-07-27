@@ -7,6 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from app.auth import User, UserRole, get_user
+from app.auth.access import (
+    assert_doctor_patient_access,
+    linked_patient_public_ids,
+    resolve_doctor,
+    resolve_patient_by_uid_or_public_id,
+)
 from app.auth.service import UserService
 from app.auth.schemas import UserCreateModel
 from app.auth.utils import make_password
@@ -19,6 +25,35 @@ from app.models.patient import GenderEnum, PatientModel
 from app.models.user import StatusEnum
 from app.models.user import UserModel
 from app.patient.schemas import PatientRequest
+
+
+def _serialize_patient(patient: PatientModel, address: Optional[AddressModel] = None) -> dict:
+    return {
+        "uid": str(patient.user.public_id),
+        "id": str(patient.user.public_id),
+        "patient_public_id": str(patient.public_id),
+        "name": patient.user.full_name,
+        "full_name": patient.user.full_name,
+        "email": patient.user.email,
+        "phone": patient.cellphone,
+        "cellphone": patient.cellphone,
+        "dateofbirth": patient.birth_date.isoformat() if patient.birth_date else None,
+        "birth_date": patient.birth_date.isoformat() if patient.birth_date else None,
+        "gender": patient.gender.value if hasattr(patient.gender, "value") else patient.gender,
+        "status": patient.user.status.value if hasattr(patient.user.status, "value") else str(patient.user.status),
+        "date_created": patient.user.created_date,
+        "date_updated": patient.user.updated_date,
+        "created_at": patient.user.created_date,
+        "address": {
+            "uid": str(address.public_id) if address else None,
+            "street": address.street if address else "",
+            "number": address.number if address else "",
+            "complement": address.complement if address else "",
+            "neighborhood": address.neighborhood if address else "",
+            "city": address.city if address else "",
+            "state": address.state if address else "",
+        },
+    }
 
 
 class PatientView:
@@ -152,47 +187,16 @@ class PatientView:
                 detail="Acesso negado",
             )
 
-        patient = (
-            db.query(PatientModel)
-            .join(UserModel, PatientModel.user_id == UserModel.id)
-            .filter(UserModel.public_id == patient_uid)
-            .first()
-        )
-        if not patient:
-            patient = db.query(PatientModel).filter(PatientModel.public_id == patient_uid).first()
-
-        address = (
-            db.query(AddressModel).filter(AddressModel.patient_id == patient.id).first() if patient else None
-        )
-
+        patient = resolve_patient_by_uid_or_public_id(db, patient_uid)
         if not patient:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Paciente nao encontrado"
             )
-        return {
-            "uid": str(patient.user.public_id),
-            "patient_public_id": str(patient.public_id),
-            "name": patient.user.full_name,
-            "full_name": patient.user.full_name,
-            "email": patient.user.email,
-            "phone": patient.cellphone,
-            "cellphone": patient.cellphone,
-            "dateofbirth": patient.birth_date.isoformat() if patient.birth_date else None,
-            "birth_date": patient.birth_date.isoformat() if patient.birth_date else None,
-            "gender": patient.gender.value if hasattr(patient.gender, "value") else patient.gender,
-            "status": patient.user.status.value if hasattr(patient.user.status, "value") else str(patient.user.status),
-            "date_created": patient.user.created_date,
-            "date_updated": patient.user.updated_date,
-            "address": {
-                "uid": str(address.public_id) if address else None,
-                "street": address.street if address else "",
-                "number": address.number if address else "",
-                "complement": address.complement if address else "",
-                "neighborhood": address.neighborhood if address else "",
-                "city": address.city if address else "",
-                "state": address.state if address else "",
-            },
-        }
+
+        assert_doctor_patient_access(db, user, patient.public_id)
+
+        address = db.query(AddressModel).filter(AddressModel.patient_id == patient.id).first()
+        return _serialize_patient(patient, address)
 
     @staticmethod
     async def get_all(
@@ -211,41 +215,30 @@ class PatientView:
                 detail="Acesso negado",
             )
 
-        patients = (
-            db.query(PatientModel)
-            .join(UserModel, PatientModel.user_id == UserModel.id)
-            .all()
-        )
+        if user.role == UserRole.ADMIN:
+            patients = (
+                db.query(PatientModel)
+                .join(UserModel, PatientModel.user_id == UserModel.id)
+                .all()
+            )
+        else:
+            doctor = resolve_doctor(db, user)
+            if not doctor:
+                return []
+            allowed = linked_patient_public_ids(db, doctor.public_id)
+            if not allowed:
+                return []
+            patients = (
+                db.query(PatientModel)
+                .join(UserModel, PatientModel.user_id == UserModel.id)
+                .filter(PatientModel.public_id.in_(allowed))
+                .all()
+            )
+
         result = []
         for patient in patients:
-            address = (
-                db.query(AddressModel).filter(AddressModel.patient_id == patient.id).first()
-                if patient else None
-            )
-            result.append({
-                "uid": str(patient.user.public_id),
-                "id": str(patient.user.public_id),
-                "patient_public_id": str(patient.public_id),
-                "name": patient.user.full_name,
-                "full_name": patient.user.full_name,
-                "email": patient.user.email,
-                "phone": patient.cellphone,
-                "cellphone": patient.cellphone,
-                "dateofbirth": patient.birth_date.isoformat() if patient.birth_date else None,
-                "birth_date": patient.birth_date.isoformat() if patient.birth_date else None,
-                "gender": patient.gender.value if hasattr(patient.gender, "value") else patient.gender,
-                "status": patient.user.status.value if hasattr(patient.user.status, "value") else str(patient.user.status),
-                "date_created": patient.user.created_date,
-                "created_at": patient.user.created_date,
-                "address": {
-                    "street": address.street if address else "",
-                    "number": address.number if address else "",
-                    "complement": address.complement if address else "",
-                    "neighborhood": address.neighborhood if address else "",
-                    "city": address.city if address else "",
-                    "state": address.state if address else "",
-                } if address else {},
-            })
+            address = db.query(AddressModel).filter(AddressModel.patient_id == patient.id).first()
+            result.append(_serialize_patient(patient, address))
         return result
 
     @staticmethod
@@ -272,51 +265,42 @@ class PatientView:
                 detail="Acesso negado",
             )
 
-        patient = (
-            db.query(PatientModel)
-            .join(UserModel, PatientModel.user_id == UserModel.id)
-            .filter(UserModel.public_id == patient_uid)
-            .first()
-        )
-
+        patient = resolve_patient_by_uid_or_public_id(db, patient_uid)
         if not patient:
             raise HTTPException(
-                "Paciente nao encontrado", status_code=status.HTTP_404_NOT_FOUND
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Paciente nao encontrado",
             )
+
+        assert_doctor_patient_access(db, user, patient.public_id)
 
         if name:
             patient.user.full_name = name
-
             db.commit()
             db.refresh(patient.user)
 
         if email:
             patient.user.email = email
-
             db.commit()
             db.refresh(patient.user)
 
         if phone:
             patient.cellphone = phone
-
             db.commit()
             db.refresh(patient)
 
         if dateofbirth:
             patient.birth_date = dateofbirth
-
             db.commit()
             db.refresh(patient)
 
-        if gender:
+        if gender is not None:
             patient.gender = gender
-
             db.commit()
             db.refresh(patient)
 
-        if user_status:
+        if user_status is not None:
             patient.user.status = user_status
-
             db.commit()
             db.refresh(patient.user)
 

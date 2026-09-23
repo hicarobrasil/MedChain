@@ -170,8 +170,10 @@ def register_doctor(
     except IntegrityError as e:
         # Erros de constraint (como CRM duplicado) devem gerar 409 e nao deixar estado inconsistente
         db.rollback()
-        logging.exception("Erro de integridade ao cadastrar médico")
-        if "doctor_CRM_key" in str(e.orig) or "CRM" in str(e.orig):
+        logging.error(f"Erro de integridade ao cadastrar médico: {str(e)}")
+        if hasattr(e, 'orig') and e.orig:
+            logging.error(f"Orig: {str(e.orig)}")
+        if "doctor_CRM_key" in str(e) or "CRM" in str(e):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Este CRM já está cadastrado para outro médico.",
@@ -182,10 +184,13 @@ def register_doctor(
         )
     except Exception as e:
         db.rollback()
-        logging.exception("Erro ao cadastrar médico")
+        logging.error(f"Erro ao cadastrar médico: {str(e)}")
+        # Se for uma HTTPException já lançada (como a 409 do CRM duplicado), relança
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao cadastrar: {str(e)}. Verifique se o banco de dados está rodando.",
+            detail=f"Erro ao cadastrar: {str(e)}",
         )
     access_token = create_access_token(
         user_data={

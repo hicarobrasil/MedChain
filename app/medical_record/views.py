@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from uuid import UUID
 import json
 from typing import Optional
@@ -168,8 +169,8 @@ class MedicalRecordsView:
             )
 
         medical_record = MedicalRecordModel(
-            doctor_id=data.get("doctor_id"),
-            patient_id=data.get("patient_id"),
+            doctor_id=UUID(data.get("doctor_id")) if isinstance(data.get("doctor_id"), str) else data.get("doctor_id"),
+            patient_id=UUID(data.get("patient_id")) if isinstance(data.get("patient_id"), str) else data.get("patient_id"),
         )
 
         db.add(medical_record)
@@ -249,7 +250,7 @@ class MedicalRecordsView:
             try:
                 diagnostic = DiagnosticModel(
                     description=data.get("description"),
-                    issue_date=data.get("issue_date"),
+                    issue_date=datetime.strptime(data.get("issue_date"), "%Y-%m-%d").date() if isinstance(data.get("issue_date"), str) else data.get("issue_date"),
                     result=data.get("result"),
                     medical_record_id=medical_record.id,
                 )

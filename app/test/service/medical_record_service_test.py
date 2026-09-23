@@ -40,20 +40,60 @@ class TestMedicalRecordService:
         mock_hash_file.assert_called_once()
         mock_store_hash.assert_called_once()
 
-    def test_get_medical_record(self, db_session):
+    @patch.object(SolanaHashStorage, 'store_file_hash')
+    @patch.object(SolanaHashStorage, 'hash_file')
+    def test_create_medical_record_exception_handling(self, mock_hash_file, mock_store_hash, db_session):
+        # Configurar mock para falhar na blockchain
+        mock_hash_file.return_value = "mocked_file_hash_123"
+        mock_store_hash.side_effect = Exception("Blockchain failure")
+        
         doctor_id = uuid.uuid4()
         patient_id = uuid.uuid4()
-        record = MedicalRecordModel(
-            doctor_id=doctor_id,
-            patient_id=patient_id,
-            blockchain_tx_id="tx_123"
-        )
-        db_session.add(record)
+        data = {
+            "patient_id": patient_id,
+            "doctor_id": doctor_id
+        }
+        
+        service = MedicalRecordService(db_session)
+        # Deve executar sem levantar exceção, pois o erro é tratado internamente
+        record = service.create_medical_record(data)
+        
+        assert record.blockchain_tx_id is None
+        mock_store_hash.assert_called_once()
+
+    def test_get_medical_records_by_patient(self, db_session):
+        patient_id = uuid.uuid4()
+        record1 = MedicalRecordModel(doctor_id=uuid.uuid4(), patient_id=patient_id)
+        record2 = MedicalRecordModel(doctor_id=uuid.uuid4(), patient_id=uuid.uuid4())
+        db_session.add_all([record1, record2])
         db_session.commit()
         
         service = MedicalRecordService(db_session)
-        fetched_record = service.get_medical_record(record.id)
+        records = service.get_medical_records_by_patient(patient_id)
         
-        assert fetched_record is not None
-        assert fetched_record.id == record.id
-        assert fetched_record.blockchain_tx_id == "tx_123"
+        assert len(records) == 1
+        assert records[0].patient_id == patient_id
+
+    def test_get_medical_records_by_doctor(self, db_session):
+        doctor_id = uuid.uuid4()
+        record1 = MedicalRecordModel(doctor_id=doctor_id, patient_id=uuid.uuid4())
+        record2 = MedicalRecordModel(doctor_id=uuid.uuid4(), patient_id=uuid.uuid4())
+        db_session.add_all([record1, record2])
+        db_session.commit()
+        
+        service = MedicalRecordService(db_session)
+        records = service.get_medical_records_by_doctor(doctor_id)
+        
+        assert len(records) == 1
+        assert records[0].doctor_id == doctor_id
+
+    def test_get_all_medical_records(self, db_session):
+        record1 = MedicalRecordModel(doctor_id=uuid.uuid4(), patient_id=uuid.uuid4())
+        record2 = MedicalRecordModel(doctor_id=uuid.uuid4(), patient_id=uuid.uuid4())
+        db_session.add_all([record1, record2])
+        db_session.commit()
+        
+        service = MedicalRecordService(db_session)
+        records = service.get_all_medical_records(skip=0, limit=1)
+        
+        assert len(records) == 1

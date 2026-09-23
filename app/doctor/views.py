@@ -63,8 +63,23 @@ class DoctorView:
         doctor = (
             db.query(DoctorModel).filter(DoctorModel.public_id == doctor_id).first()
         )
+        if not doctor:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Medico nao encontrado",
+            )
 
-        return doctor
+        return {
+            "uid": doctor.public_id,
+            "name": doctor.user.full_name,
+            "crm": doctor.CRM,
+            "specialty": doctor.specialty.value if hasattr(doctor.specialty, "value") else str(doctor.specialty),
+            "email": doctor.user.email,
+            "phone": "N/A", # Needs to be added to model if required
+            "status": doctor.user.status.value if hasattr(doctor.user.status, "value") else str(doctor.user.status),
+            "date_created": doctor.created_date,
+            "date_updated": doctor.updated_date,
+        }
 
     @staticmethod
     async def create_doctor(

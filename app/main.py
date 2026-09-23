@@ -47,16 +47,18 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(3600)
 
     # Inicia a tarefa em segundo plano
-    sync_task = asyncio.create_task(blockchain_sync_worker())
+    if not os.environ.get("DISABLE_BACKGROUND_TASKS"):
+        sync_task = asyncio.create_task(blockchain_sync_worker())
     
     yield
     
     # Finalização: cancela a tarefa ao desligar a aplicação
-    sync_task.cancel()
-    try:
-        await sync_task
-    except asyncio.CancelledError:
-        pass
+    if not os.environ.get("DISABLE_BACKGROUND_TASKS"):
+        sync_task.cancel()
+        try:
+            await sync_task
+        except asyncio.CancelledError:
+            pass
 
 
 def create_app() -> FastAPI:

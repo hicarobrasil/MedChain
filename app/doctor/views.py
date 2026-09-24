@@ -20,6 +20,21 @@ from app.models.medical_certificated import MedicalCertificatedModel
 from app.models.patient import PatientModel
 
 
+def _serialize_doctor(doctor: DoctorModel) -> dict:
+    """Monta o payload no formato de DoctorOut a partir do modelo."""
+    return {
+        "uid": doctor.public_id,
+        "name": doctor.user.full_name,
+        "crm": doctor.CRM,
+        "specialty": doctor.specialty.value if hasattr(doctor.specialty, "value") else str(doctor.specialty),
+        "email": doctor.user.email,
+        "phone": "N/A",  # Needs to be added to model if required
+        "status": doctor.user.status.value if hasattr(doctor.user.status, "value") else str(doctor.user.status),
+        "date_created": doctor.created_date,
+        "date_updated": doctor.updated_date,
+    }
+
+
 class DoctorView:
 
     @staticmethod
@@ -71,17 +86,7 @@ class DoctorView:
                 detail="Medico nao encontrado",
             )
 
-        return {
-            "uid": doctor.public_id,
-            "name": doctor.user.full_name,
-            "crm": doctor.CRM,
-            "specialty": doctor.specialty.value if hasattr(doctor.specialty, "value") else str(doctor.specialty),
-            "email": doctor.user.email,
-            "phone": "N/A", # Needs to be added to model if required
-            "status": doctor.user.status.value if hasattr(doctor.user.status, "value") else str(doctor.user.status),
-            "date_created": doctor.created_date,
-            "date_updated": doctor.updated_date,
-        }
+        return _serialize_doctor(doctor)
 
     @staticmethod
     async def create_doctor(
@@ -109,7 +114,7 @@ class DoctorView:
         db.commit()
         db.refresh(doctor)
 
-        return doctor
+        return _serialize_doctor(doctor)
 
     @staticmethod
     async def update_doctor(
@@ -150,7 +155,7 @@ class DoctorView:
         db.commit()
         db.refresh(doctor)
 
-        return doctor
+        return _serialize_doctor(doctor)
 
     @staticmethod
     async def get_dashboard_stats(

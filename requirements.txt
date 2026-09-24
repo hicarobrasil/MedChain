@@ -25,6 +25,7 @@ cryptography==44.0.3
 dnspython==2.7.0
 ecdsa==0.19.1
 email_validator==2.2.0
+Faker==37.1.0
 fastapi==0.115.12
 fastapi-mail==1.4.2
 frozenlist==1.6.0

@@ -1,12 +1,12 @@
 """
-Serviço de gerenciamento de registros de pacientes.
+Servico de gerenciamento de registros de pacientes.
 """
 import uuid
 from typing import Any, Dict
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from app.models.pacient_record import PacientRecord, GenderEnum, StatusEnum
+from app.models.patient import PacientRecord, GenderEnum, StatusEnum
 
 class PacientService:
 
@@ -19,9 +19,9 @@ class PacientService:
             status_int = data.get("status")
 
             if gender_int not in GenderEnum._value2member_map_:
-                raise ValueError("Gênero inválido")
+                raise ValueError("Gênero invalido")
             if status_int not in StatusEnum._value2member_map_:
-                raise ValueError("Status inválido")
+                raise ValueError("Status invalido")
                 
             pacient = PacientRecord(
                 name=data.get("name"),
@@ -45,7 +45,7 @@ class PacientService:
     def get_pacient_by_uid(self, pacient_uid: uuid.UUID) -> PacientRecord:
         pacient = self.db.query(PacientRecord).filter(PacientRecord.uid == pacient_uid).first()
         if not pacient:
-            raise HTTPException(status_code=404, detail="Paciente não encontrado")
+            raise HTTPException(status_code=404, detail="Paciente nao encontrado")
         return pacient
 
     def get_all_pacients(self) -> list[PacientRecord]:
@@ -57,12 +57,12 @@ class PacientService:
         if "gender" in update_data and update_data["gender"] is not None:
             gender_int = update_data["gender"]
             if gender_int not in GenderEnum._value2member_map_:
-                raise HTTPException(status_code=400, detail="Gênero inválido")
+                raise HTTPException(status_code=400, detail="Gênero invalido")
 
         if "status" in update_data and update_data["status"] is not None:
             status_int = update_data["status"]
             if status_int not in StatusEnum._value2member_map_:
-                raise HTTPException(status_code=400, detail="Status inválido")
+                raise HTTPException(status_code=400, detail="Status invalido")
 
         for field, value in update_data.items():
             setattr(pacient, field, value)

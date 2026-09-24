@@ -1,0 +1,739 @@
+import logging
+from uuid import UUID
+import json
+from typing import Optional
+
+from app.models.doctor import DoctorModel
+from app.models.medical_record import MedicalRecordModel
+from app.models.patient import PatientModel
+from app.models.user import UserModel
+from fastapi import Body, Depends, HTTPException, status
+from sqlalchemy import select, true, and_
+from sqlalchemy.orm import Session as SQLAlchemySession
+from sqlalchemy.orm import joinedload, selectinload
+
+from app.auth import User, UserRole, get_user
+from app.auth.access import (
+    doctor_has_patient_access,
+    ensure_doctor_patient_link,
+    resolve_doctor,
+)
+from app.database import get_session
+from app.medical_record.enums import MedicalRecordTypes
+from app.medical_record.serializers import (
+    serialize_consultation,
+    serialize_diagnostic,
+    serialize_medical_certificate,
+    serialize_medical_record_full,
+)
+from app.models.consultation import ConsultationModel
+from app.models.diagnostic import DiagnosticModel
+from app.models.medical_certificated import MedicalCertificatedModel
+from app.models.prescription import PrescriptionModel
+from app.models.prescription_item import PrescriptionItemModel
+from app.blockchain.solana_client import SolanaHashStorage
+from app.settings import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+def _resolve_patient_public_id(db: SQLAlchemySession, user: User) -> Optional[UUID]:
+    result = db.execute(
+        select(PatientModel)
+        .join(UserModel, PatientModel.user_id == UserModel.id)
+        .where(UserModel.email == user.email)
+    )
+    patient = result.scalar_one_or_none()
+    return patient.public_id if patient else None
+
+
+def _build_record_hash_payload(medical_record: MedicalRecordModel) -> tuple[str, dict]:
+    """Reconstroi o payload usado na ancora blockchain (deve espelhar o POST)."""
+    if medical_record.consultation:
+        consultation = medical_record.consultation
+        prescription_items_list = None
+        prescription = getattr(consultation, "prescription", None)
+        if prescription and getattr(prescription, "items", None):
+            prescription_items_list = [
+                {
+                    "medication_name": item.medication_name,
+                    "dosage": item.dosage,
+                    "frequency": item.frequency,
+                    "treatment_duration": item.treatment_duration,
+                }
+                for item in prescription.items
+            ]
+        record_type = MedicalRecordTypes.CONSULTATION.value
+        record_specific_data = {
+            "chief_complaint": consultation.chief_complaint,
+            "diagnosis": consultation.diagnosis,
+            "treatment_plan": consultation.treatment_plan,
+            "prescription": prescription_items_list,
+        }
+    elif medical_record.diagnostic:
+        diagnostic = medical_record.diagnostic
+        record_type = MedicalRecordTypes.DIAGNOSTIC.value
+        record_specific_data = {
+            "description": diagnostic.description,
+            "result": diagnostic.result,
+            "issue_date": str(diagnostic.issue_date),
+        }
+    elif medical_record.certificate:
+        certificate = medical_record.certificate
+        record_type = MedicalRecordTypes.MEDICAL_CERTIFICATE.value
+        record_specific_data = {
+            "purpose": certificate.purpose,
+            "period_of_leave": certificate.period_of_leave,
+        }
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Prontuario sem tipo associado para verificacao.",
+        )
+
+    payload = {
+        "record_id": str(medical_record.id),
+        "patient_id": str(medical_record.patient_id),
+        "doctor_id": str(medical_record.doctor_id),
+        "type": record_type,
+        "data": record_specific_data,
+    }
+    return record_type, payload
+
+
+def _ensure_record_access(db: SQLAlchemySession, user: User, medical_record: MedicalRecordModel) -> None:
+    if user.role == UserRole.ADMIN:
+        return
+    if user.role == UserRole.DOCTOR:
+        doctor = resolve_doctor(db, user)
+        if doctor and str(doctor.public_id) == str(medical_record.doctor_id):
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+    if user.role == UserRole.PATIENT:
+        patient_id = _resolve_patient_public_id(db, user)
+        if patient_id and str(patient_id) == str(medical_record.patient_id):
+            return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+
+
+class MedicalRecordsView:
+    @staticmethod
+    async def get_all(
+        type: Optional[MedicalRecordTypes] = None,
+        doctor_id: Optional[UUID] = None,
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario nao autenticado.",
+            )
+
+        if user.role not in {
+            UserRole.ADMIN,
+            UserRole.DOCTOR,
+            UserRole.PATIENT,
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado."
+            )
+
+        try:
+            patient_filter = true()
+            if user.role == UserRole.PATIENT:
+                patient_id = _resolve_patient_public_id(db, user)
+                if not patient_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Perfil de paciente nao encontrado.",
+                    )
+                patient_filter = MedicalRecordModel.patient_id == patient_id
+
+            if user.role == UserRole.DOCTOR:
+                doctor = resolve_doctor(db, user)
+                if not doctor:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Perfil de medico nao encontrado.",
+                    )
+                if doctor_id and str(doctor_id) != str(doctor.public_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Acesso negado aos prontuarios de outro medico.",
+                    )
+                doctor_filter = MedicalRecordModel.doctor_id == doctor.public_id
+            elif doctor_id and user.role == UserRole.ADMIN:
+                doctor_filter = MedicalRecordModel.doctor_id == doctor_id
+            else:
+                doctor_filter = true()
+
+            access_filter = and_(doctor_filter, patient_filter)
+
+            stmt_consultation = (
+                select(ConsultationModel)
+                .join(MedicalRecordModel, ConsultationModel.medical_record_id == MedicalRecordModel.id)
+                .where(access_filter)
+                .options(joinedload(ConsultationModel.medical_record))
+                .options(
+                    joinedload(ConsultationModel.medical_record)
+                    .joinedload(MedicalRecordModel.patient)
+                    .joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(ConsultationModel.medical_record)
+                    .joinedload(MedicalRecordModel.doctor)
+                    .joinedload(DoctorModel.user)
+                )
+                .options(
+                    selectinload(ConsultationModel.prescription).selectinload(
+                        PrescriptionModel.items
+                    )
+                )
+            )
+
+            stmt_diagnostic = (
+                select(DiagnosticModel)
+                .join(MedicalRecordModel, DiagnosticModel.medical_record_id == MedicalRecordModel.id)
+                .where(access_filter)
+                .options(joinedload(DiagnosticModel.medical_record))
+                .options(
+                    joinedload(DiagnosticModel.medical_record)
+                    .joinedload(MedicalRecordModel.patient)
+                    .joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(DiagnosticModel.medical_record)
+                    .joinedload(MedicalRecordModel.doctor)
+                    .joinedload(DoctorModel.user)
+                )
+            )
+
+            stmt_certificate = (
+                select(MedicalCertificatedModel)
+                .join(MedicalRecordModel, MedicalCertificatedModel.medical_record_id == MedicalRecordModel.id)
+                .where(access_filter)
+                .options(joinedload(MedicalCertificatedModel.medical_record))
+                .options(
+                    joinedload(MedicalCertificatedModel.medical_record)
+                    .joinedload(MedicalRecordModel.patient)
+                    .joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(MedicalCertificatedModel.medical_record)
+                    .joinedload(MedicalRecordModel.doctor)
+                    .joinedload(DoctorModel.user)
+                )
+            )
+
+            if type == MedicalRecordTypes.CONSULTATION:
+                result = db.execute(stmt_consultation)
+                items = result.scalars().all()
+                return [serialize_consultation(c) for c in items]
+
+            elif type == MedicalRecordTypes.DIAGNOSTIC:
+                result = db.execute(stmt_diagnostic)
+                items = result.scalars().all()
+                return [serialize_diagnostic(d) for d in items]
+
+            elif type == MedicalRecordTypes.MEDICAL_CERTIFICATE:
+                result = db.execute(stmt_certificate)
+                items = result.scalars().all()
+                return [serialize_medical_certificate(c) for c in items]
+
+            else:
+                # Busca todos se nenhum tipo for especificado
+                consultations = db.execute(stmt_consultation).scalars().all()
+                diagnostics = db.execute(stmt_diagnostic).scalars().all()
+                certificates = db.execute(stmt_certificate).scalars().all()
+
+                return {
+                    "consultations": [serialize_consultation(c) for c in consultations],
+                    "diagnostics": [serialize_diagnostic(d) for d in diagnostics],
+                    "medical_certificates": [serialize_medical_certificate(c) for c in certificates],
+                }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao listar prontuarios: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro interno do servidor.",
+            )
+
+    @staticmethod
+    async def post(
+        payload: dict = Body(...),
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        type = MedicalRecordTypes(payload.get("type", "consultation"))
+        data = payload.get("data", {})
+
+        if user.role not in {
+            UserRole.ADMIN,
+            UserRole.DOCTOR,
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado."
+            )
+
+        raw_doctor_id = data.get("doctor_id")
+        raw_patient_id = data.get("patient_id")
+        if not raw_doctor_id or not raw_patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="doctor_id e patient_id sao obrigatorios.",
+            )
+
+        try:
+            doctor_uuid = UUID(str(raw_doctor_id))
+            patient_uuid = UUID(str(raw_patient_id))
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="doctor_id ou patient_id invalidos.",
+            )
+
+        doctor_row = db.query(DoctorModel).filter(DoctorModel.public_id == doctor_uuid).first()
+        patient_row = db.query(PatientModel).filter(PatientModel.public_id == patient_uuid).first()
+        if not doctor_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico nao encontrado.")
+        if not patient_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente nao encontrado.")
+
+        if user.role == UserRole.DOCTOR:
+            logged_doctor = resolve_doctor(db, user)
+            if not logged_doctor or str(logged_doctor.public_id) != str(doctor_uuid):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Nao e permitido criar prontuario em nome de outro medico.",
+                )
+            if not doctor_has_patient_access(db, logged_doctor.public_id, patient_uuid):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Acesso negado a este paciente.",
+                )
+
+        medical_record = MedicalRecordModel(
+            doctor_id=doctor_uuid,
+            patient_id=patient_uuid,
+        )
+
+        db.add(medical_record)
+
+        db.commit()
+        db.refresh(medical_record)
+
+        # Garante vinculo para listagens futuras
+        try:
+            ensure_doctor_patient_link(db, doctor_uuid, patient_uuid)
+        except Exception as link_err:
+            logger.warning("Falha ao garantir vinculo doctor_patient: %s", link_err)
+
+        record_specific_data = {}
+
+        if type == MedicalRecordTypes.CONSULTATION:
+
+            try:
+
+                consultation = ConsultationModel(
+                    chief_complaint=data.get("chief_complaint"),
+                    history_of_present_illness=data.get("history_of_present_illness"),
+                    diagnosis=data.get("diagnosis"),
+                    treatment_plan=data.get("treatment_plan"),
+                    medical_record_id=medical_record.id,
+                )
+
+                db.add(consultation)
+                db.commit()
+                db.refresh(consultation)
+
+                prescription_data = data.get("prescription")
+                prescription_items_list = []
+
+                if prescription_data:
+                    prescription = PrescriptionModel(consultation_id=consultation.id)
+                    db.add(prescription)
+                    db.commit()
+                    db.refresh(prescription)
+
+                    items = prescription_data.get("items", [])
+                    for item in items:
+                        prescription_item = PrescriptionItemModel(
+                            medication_name=item.get("medication_name"),
+                            dosage=item.get("dosage"),
+                            frequency=item.get("frequency"),
+                            treatment_duration=item.get("treatment_duration"),
+                            prescription_id=prescription.id,
+                        )
+                        db.add(prescription_item)
+                        prescription_items_list.append(
+                            {
+                                "medication_name": item.get("medication_name"),
+                                "dosage": item.get("dosage"),
+                                "frequency": item.get("frequency"),
+                                "treatment_duration": item.get("treatment_duration"),
+                            }
+                        )
+                    db.commit()
+
+                    # Atualiza o objeto consultation para incluir a relacao recem-criada
+                    # Isso garante que o retorno da API inclua a receita
+                    db.refresh(consultation)
+
+                record_specific_data = {
+                    "chief_complaint": consultation.chief_complaint,
+                    "diagnosis": consultation.diagnosis,
+                    "treatment_plan": consultation.treatment_plan,
+                    "prescription": (
+                        prescription_items_list if prescription_data else None
+                    ),
+                }
+
+            except Exception as e:
+                logger.error(f"Erro ao criar consulta: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Erro ao criar consulta.",
+                )
+
+        elif type == MedicalRecordTypes.DIAGNOSTIC:
+
+            try:
+                diagnostic = DiagnosticModel(
+                    description=data.get("description"),
+                    issue_date=data.get("issue_date"),
+                    result=data.get("result"),
+                    medical_record_id=medical_record.id,
+                )
+                db.add(diagnostic)
+                db.commit()
+                db.refresh(diagnostic)
+
+                record_specific_data = {
+                    "description": diagnostic.description,
+                    "result": diagnostic.result,
+                    "issue_date": str(diagnostic.issue_date),
+                }
+
+            except Exception as e:
+                logger.error(f"Erro ao criar diagnostico: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Erro ao criar diagnostico.",
+                )
+
+        elif type == MedicalRecordTypes.MEDICAL_CERTIFICATE:
+
+            try:
+                medical_certificate = MedicalCertificatedModel(
+                    purpose=data.get("purpose"),
+                    period_of_leave=data.get("period_of_leave"),
+                    medical_record_id=medical_record.id,
+                )
+                db.add(medical_certificate)
+                db.commit()
+                db.refresh(medical_certificate)
+
+                record_specific_data = {
+                    "purpose": medical_certificate.purpose,
+                    "period_of_leave": medical_certificate.period_of_leave,
+                }
+
+            except Exception as e:
+                logger.error(f"Erro ao criar certificado medico: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Erro ao criar certificado medico.",
+                )
+
+        # --- Integracao com Blockchain ---
+        settings = get_settings()
+        if settings.ENABLE_BLOCKCHAIN:
+            try:
+                # 1. Preparar dados para hash (Metadados + Dados Especificos)
+                payload_to_hash = {
+                    "record_id": str(medical_record.id),
+                    "patient_id": str(medical_record.patient_id),
+                    "doctor_id": str(medical_record.doctor_id),
+                    "type": type.value,
+                    "data": record_specific_data,
+                }
+
+                # Serializa garantindo ordem das chaves para reprodutibilidade do hash
+                payload_bytes = json.dumps(payload_to_hash, sort_keys=True).encode("utf-8")
+
+                # 2. Calcular Hash e Enviar para Solana
+                solana_storage = SolanaHashStorage()
+                file_hash = solana_storage.hash_file(payload_bytes)
+
+                # Tentar airdrop se saldo zerado (devnet)
+                try:
+                    if solana_storage.get_balance() < 0.01:
+                        solana_storage.airdrop(1.0)
+                except Exception as airdrop_err:
+                    logger.warning(f"Airdrop Solana falhou: {airdrop_err}")
+
+                # Envia para blockchain (Memo Program)
+                tx_id = solana_storage.store_file_hash(str(medical_record.id), file_hash)
+
+                if tx_id:
+                    medical_record.hash = file_hash
+                    medical_record.blockchain_tx_id = tx_id
+                    db.commit()
+            except Exception as e:
+                logger.error(f"Erro ao registrar na blockchain: {str(e)}")
+
+        medical_record_public_id = str(medical_record.public_id)
+        blockchain_payload = {
+            "hash": medical_record.hash,
+            "blockchain_tx_id": medical_record.blockchain_tx_id,
+            "anchored": bool(medical_record.hash and medical_record.blockchain_tx_id),
+        }
+        if type == MedicalRecordTypes.CONSULTATION:
+            return {
+                "medical_record_public_id": medical_record_public_id,
+                "consultation": record_specific_data,
+                **blockchain_payload,
+            }
+        elif type == MedicalRecordTypes.DIAGNOSTIC:
+            return {
+                "medical_record_public_id": medical_record_public_id,
+                "diagnostic": record_specific_data,
+                **blockchain_payload,
+            }
+        elif type == MedicalRecordTypes.MEDICAL_CERTIFICATE:
+            return {
+                "medical_record_public_id": medical_record_public_id,
+                "medical_certificate": record_specific_data,
+                **blockchain_payload,
+            }
+
+        return {
+            "medical_record_public_id": medical_record_public_id,
+            "message": "Registro criado",
+            "data": record_specific_data,
+            **blockchain_payload,
+        }
+
+    @staticmethod
+    async def get_by_public_id(
+        public_id: UUID,
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario nao autenticado.",
+            )
+
+        if user.role not in {
+            UserRole.ADMIN,
+            UserRole.DOCTOR,
+            UserRole.PATIENT,
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado."
+            )
+
+        try:
+            result = db.execute(
+                select(MedicalRecordModel)
+                .options(
+                    joinedload(MedicalRecordModel.patient).joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(MedicalRecordModel.doctor).joinedload(DoctorModel.user)
+                )
+                .options(selectinload(MedicalRecordModel.consultation))
+                .options(selectinload(MedicalRecordModel.diagnostic))
+                .options(selectinload(MedicalRecordModel.certificate))
+                .options(
+                    selectinload(MedicalRecordModel.consultation)
+                    .selectinload(ConsultationModel.prescription)
+                    .selectinload(PrescriptionModel.items)
+                )
+                .where(MedicalRecordModel.public_id == public_id)
+            )
+            medical_record = result.scalar_one_or_none()
+
+            if not medical_record:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Prontuario nao encontrado.",
+                )
+
+            _ensure_record_access(db, user, medical_record)
+            return serialize_medical_record_full(medical_record)
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao buscar prontuario por ID: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro interno do servidor.",
+            )
+
+    @staticmethod
+    async def verify_integrity(
+        public_id: UUID,
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario nao autenticado.",
+            )
+
+        if user.role not in {
+            UserRole.ADMIN,
+            UserRole.DOCTOR,
+            UserRole.PATIENT,
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado."
+            )
+
+        result = db.execute(
+            select(MedicalRecordModel)
+            .options(selectinload(MedicalRecordModel.consultation).selectinload(ConsultationModel.prescription).selectinload(PrescriptionModel.items))
+            .options(selectinload(MedicalRecordModel.diagnostic))
+            .options(selectinload(MedicalRecordModel.certificate))
+            .where(MedicalRecordModel.public_id == public_id)
+        )
+        medical_record = result.scalar_one_or_none()
+
+        if not medical_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Prontuario nao encontrado.",
+            )
+
+        _ensure_record_access(db, user, medical_record)
+
+        if not medical_record.hash:
+            return {
+                "valid": False,
+                "local_match": False,
+                "on_chain": False,
+                "status": "pending",
+                "message": "Este prontuario ainda nao possui hash ancorado na blockchain.",
+                "hash": None,
+                "blockchain_tx_id": None,
+                "computed_hash": None,
+                "record_type": None,
+                "explorer_url": None,
+            }
+
+        try:
+            record_type, payload = _build_record_hash_payload(medical_record)
+            payload_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
+            solana_storage = SolanaHashStorage()
+            computed_hash = solana_storage.hash_file(payload_bytes)
+            local_match = computed_hash == medical_record.hash
+
+            on_chain = False
+            if medical_record.blockchain_tx_id:
+                on_chain = solana_storage.verify_file(
+                    str(medical_record.id),
+                    payload_bytes,
+                    medical_record.blockchain_tx_id,
+                )
+
+            valid = bool(local_match and on_chain)
+            if valid:
+                status_label = "valid"
+                message = "Integridade confirmada: o hash local coincide com o registro na Solana."
+            elif local_match and not medical_record.blockchain_tx_id:
+                status_label = "local_only"
+                message = "Hash local valido, mas nao ha transacao on-chain registrada."
+            elif local_match and not on_chain:
+                status_label = "chain_mismatch"
+                message = "Hash local valido, mas nao foi encontrado o memo correspondente na Solana."
+            else:
+                status_label = "invalid"
+                message = "Integridade comprometida: o conteudo nao corresponde ao hash armazenado."
+
+            explorer_url = (
+                f"https://explorer.solana.com/tx/{medical_record.blockchain_tx_id}?cluster=devnet"
+                if medical_record.blockchain_tx_id
+                else None
+            )
+
+            return {
+                "valid": valid,
+                "local_match": local_match,
+                "on_chain": on_chain,
+                "status": status_label,
+                "message": message,
+                "hash": medical_record.hash,
+                "computed_hash": computed_hash,
+                "blockchain_tx_id": medical_record.blockchain_tx_id,
+                "record_type": record_type,
+                "explorer_url": explorer_url,
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Erro ao verificar integridade: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao verificar integridade do prontuario.",
+            )
+
+    @staticmethod
+    async def get_by_patient_username(
+        username: str,
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario nao autenticado.",
+            )
+
+        if user.role not in {
+            UserRole.ADMIN,
+            UserRole.DOCTOR,
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado."
+            )
+
+        try:
+            result = db.execute(
+                select(MedicalRecordModel)
+                .options(
+                    joinedload(MedicalRecordModel.patient).joinedload(PatientModel.user)
+                )
+                .options(
+                    joinedload(MedicalRecordModel.doctor).joinedload(DoctorModel.user)
+                )
+                .options(selectinload(MedicalRecordModel.consultation))
+                .options(selectinload(MedicalRecordModel.diagnostic))
+                .options(selectinload(MedicalRecordModel.certificate))
+                .options(
+                    selectinload(MedicalRecordModel.consultation)
+                    .selectinload(ConsultationModel.prescription)
+                    .selectinload(PrescriptionModel.items)
+                )
+                .where(MedicalRecordModel.patient.has(UserModel.username == username))
+            )
+            medical_records = result.scalars().all()
+
+            return [serialize_medical_record_full(mr) for mr in medical_records]
+
+        except Exception as e:
+            logger.error(
+                f"Erro ao buscar prontuarios por nome de usuario do paciente: {str(e)}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro interno do servidor.",
+            )

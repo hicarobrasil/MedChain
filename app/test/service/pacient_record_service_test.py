@@ -1,5 +1,5 @@
 from app.service.pacient_record_service import PacientService
-from app.models.pacient_record import PacientRecord
+from app.models.patient import PacientRecord
 import pytest
 from unittest.mock import MagicMock
 
@@ -12,7 +12,7 @@ class TestPacientRecordService:
 
         # Dados simulados
         data = {
-            "name": "João da Silva",
+            "name": "Joao da Silva",
             "dateofbirth": "1990-01-01",
             "gender": 1,
             "email": "blabla@gmail.com",

@@ -1,42 +1,64 @@
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from typing import Optional
+from functools import lru_cache
+
 
 class Settings(BaseSettings):
-    # Required fields
-    SQLALCHEMY_DATABASE_URI: str
-    JWT_SECRET: str
-    
-    jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
-    refresh_token_expire_days: int = 7
-    
-    domain: str = "localhost:8000"
-    frontend_url: str = "http://localhost:3000"
-    
-    database_url: str
-    postgres_port: int = 5432
-    postgres_user: str = "postgres"
-    postgres_password: str
-    
-    # Redis Configuration
-    redis_url: str
-    redis_password: str
-    
-    # Email Configuration
-    smtp_server: str = "smtp.gmail.com"
-    smtp_port: int = 587
-    smtp_user: str
-    smtp_password: str
-    email_from: str
-    
-    # Use model_config instead of Config class for Pydantic v2
-    model_config = ConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        # Allow extra fields if you want flexibility
-        extra="allow"  # or "ignore" to ignore extra fields, or "forbid" to raise errors
-    )
+    # Geral
+    APP_NAME: str = "FastAPI Auth Service"
+    APP_VERSION: str = "0.1.0"
+    API_PREFIX: str = "/api/v1"
+    DEBUG: bool = True
 
-# Create settings instance
-settings = Settings()
+    # Autenticacao
+    JWT_SECRET: str
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutos
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ACCESS_TOKEN_EXPIRE_SECONDS: int = 3600  # 1 hora
+
+    # Dominio
+    DOMAIN: str = "localhost:8000"
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    # Banco de dados
+    DATABASE_URL: str
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    DATABASE_ENVIRONMENT_SUFFIX: Optional[str] = None
+    SQLALCHEMY_DATABASE_URI: Optional[str] = None
+
+    # Redis
+    REDIS_URL: str
+    REDIS_PASSWORD: Optional[str] = None
+
+    # Amazon S3 / arquivos
+    MEDICAL_RECORDS_API_AMAZON_S3_ACCESS_KEY_ID: str
+    MEDICAL_RECORDS_API_AMAZON_S3_SECRET_ACCESS_KEY: str
+    MEDICAL_RECORDS_API_AMAZON_S3_MEDICAL_RECORD_FILES_BUCKET_ID: str
+    MEDICAL_RECORDS_API_CRYPTO_KEY: Optional[str] = None
+
+    # E-mail
+    SMTP_SERVER: str
+    SMTP_PORT: int
+    SMTP_USER: str
+    SMTP_PASSWORD: str
+    EMAIL_FROM: str
+
+    # Blockchain (Solana)
+    ENABLE_BLOCKCHAIN: bool = True
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"  # Garante leitura correta de acentos no .env
+        case_sensitive = True
+        extra = "allow"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()
+
+settings = get_settings()

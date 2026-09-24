@@ -1,0 +1,123 @@
+from typing import Any, List
+
+from fastapi import Depends, Request, status
+from fastapi.exceptions import HTTPException
+from fastapi.security import HTTPBearer
+from fastapi.security.http import HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+
+from app.database import get_db as get_session
+from app.errors import AccessTokenRequired, InvalidToken, RefreshTokenRequired, UserNotFound, InsufficientPermission, AccountNotVerified
+from app.models.login_record import User
+from app.database.redis import RedisClient
+from app.settings import get_settings
+
+from .service import UserService
+from .utils import decode_token
+
+user_service = UserService()
+redis_client = RedisClient()  # Instanciar o cliente Redis
+settings = get_settings()
+
+class TokenBearer(HTTPBearer):
+
+    def __init__(self, auto_error: bool = True):
+        super().__init__(auto_error=auto_error)
+
+    async def __call__(self, request: Request) -> dict:
+        try:
+            credentials = await super().__call__(request)
+            
+            if not credentials:
+                raise InvalidToken("Credenciais nao fornecidas")
+
+            token = credentials.credentials
+            
+            if not token:
+                raise InvalidToken("Token nao fornecido")
+            
+            import logging
+            if token.startswith('"') and token.endswith('"'):
+                logging.error(f"Token com aspas detectado: {token[:30]}...")
+                raise InvalidToken("Token contem aspas - remova as aspas do header Authorization")
+            
+            if not token or token.count('.') != 2:
+                logging.error(f"Token com formato invalido: {token[:30]}...")
+                raise InvalidToken("Formato de token invalido")
+                
+            token_data = decode_token(token)
+
+            if not token_data:
+                raise InvalidToken("Token invalido ou expirado")
+
+            jti = token_data.get("jti")
+            if jti and redis_client.is_token_blacklisted(jti):
+                raise InvalidToken("Token revogado ou invalido")
+
+            # Verificar se o usuario existe e esta verificado
+            db = next(get_session())
+            user_email = token_data.get("user", {}).get("email")
+            if user_email:
+                user = user_service.get_user_by_email(user_email, db)
+                if not user:
+                    raise UserNotFound()
+                
+                if not user.is_verified:
+                    raise AccountNotVerified()
+
+            self.verify_token_data(token_data)
+
+            return token_data
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            import logging
+            logging.error(f"Erro inesperado na autenticacao: {str(e)}")
+            raise InvalidToken("Erro na validacao do token")
+
+    def verify_token_data(self, token_data: dict) -> None:
+        raise NotImplementedError("Este metodo deve ser implementado nas classes filhas")
+
+class AccessTokenBearer(TokenBearer):
+    def verify_token_data(self, token_data: dict) -> None:
+        if token_data.get("refresh"):
+            raise AccessTokenRequired()
+
+class RefreshTokenBearer(TokenBearer):
+    def verify_token_data(self, token_data: dict) -> None:
+        if not token_data.get("refresh"):
+            raise RefreshTokenRequired()
+
+
+def get_current_user(
+    token_details: dict = Depends(AccessTokenBearer()),
+    db: Session = Depends(get_session),
+) -> User:
+    user_service = UserService()
+    
+    if not token_details or not token_details.get("user") or not token_details["user"].get("email"):
+        raise InvalidToken("Token nao contem informacoes validas do usuario")
+        
+    user_email = token_details["user"]["email"]
+    
+    user = user_service.get_user_by_email(user_email, db)
+    
+    if not user:
+        raise UserNotFound()
+        
+    return user
+
+class RoleChecker:
+    
+    def __init__(self, allowed_roles: List[str]) -> None:
+        self.allowed_roles = allowed_roles
+
+    def __call__(self, current_user: User = Depends(get_current_user)) -> bool:
+        if not current_user.is_verified:
+            raise AccountNotVerified()
+            
+        if current_user.role in self.allowed_roles:
+            return True
+
+        raise InsufficientPermission()

@@ -1,1 +1,4 @@
 Generic single-database configuration.
+
+
+alembic -c app/database/alembic.ini revision --autogenerate -m "Adiciona modelo DoctorRecord"

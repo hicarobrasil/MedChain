@@ -2,7 +2,6 @@ from fastapi import Depends, HTTPException, status
 from uuid import UUID
 from app.auth.dependencies import AccessTokenBearer, RoleChecker
 from app.service.medical_record_service import MedicalRecordService
-from app.service.pacient_record_service import PacientService
 from app.database import get_db
 from sqlalchemy.orm import Session
 

@@ -398,3 +398,53 @@ class FileView:
                 "Cache-Control": "private, no-store",
             },
         )
+
+    @staticmethod
+    async def get_all_files_by_patient(
+        patient_uid: UUID,
+        db: SQLAlchemySession = Depends(get_session),
+        user: User = Depends(get_user),
+    ):
+        """Lista os arquivos do paciente ja com o conteudo descriptografado em base64."""
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario nao autenticado.",
+            )
+
+        if user.role not in [UserRole.DOCTOR, UserRole.ADMIN, UserRole.PATIENT]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Permissao negada."
+            )
+
+        if user.role == UserRole.PATIENT:
+            patient_id = _resolve_patient_public_id(db, user)
+            if not patient_id or str(patient_id) != str(patient_uid):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado."
+                )
+        elif user.role == UserRole.DOCTOR:
+            patient = resolve_patient_by_uid_or_public_id(db, patient_uid)
+            if not patient:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Paciente nao encontrado."
+                )
+            assert_doctor_patient_access(db, user, patient.public_id)
+            patient_uid = patient.public_id
+
+        files = db.execute(
+            select(FileModel).where(FileModel.patient_uid == patient_uid)
+        ).scalars().all()
+
+        response = []
+        for file_record in files:
+            try:
+                content = base64.b64encode(_read_decrypted_file(file_record)).decode("utf-8")
+            except HTTPException as exc:
+                logger.error(
+                    "Erro ao descriptografar arquivo %s: %s", file_record.id, exc.detail
+                )
+                content = None
+            response.append({**_serialize_file(file_record), "content": content})
+
+        return response

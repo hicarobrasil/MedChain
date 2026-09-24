@@ -59,7 +59,6 @@ class S3Client:
         decrypted_file = UploadFile(
             filename=key,
             file=BytesIO(decrypted),
-            content_type="application/octet-stream",
         )
         return decrypted_file
 

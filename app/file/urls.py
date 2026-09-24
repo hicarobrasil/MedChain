@@ -27,3 +27,9 @@ router.get(
     name="get_file_by_id",
     status_code=200,
 )(FileView.get_file)
+
+router.get(
+    "/patient/{patient_uid}/",
+    name="get_files_by_patient",
+    status_code=200,
+)(FileView.get_all_files_by_patient)

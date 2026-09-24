@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Form
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLAlchemySession
 
@@ -244,12 +244,12 @@ class PatientView:
     @staticmethod
     async def put(
         patient_uid: uuid.UUID,
-        name: Optional[str] = None,
-        email: Optional[str] = None,
-        phone: Optional[str] = None,
-        dateofbirth: Optional[datetime] = None,
-        gender: Optional[int] = None,
-        user_status: Optional[int] = None,
+        name: Optional[str] = Form(None),
+        email: Optional[str] = Form(None),
+        phone: Optional[str] = Form(None),
+        dateofbirth: Optional[str] = Form(None),
+        gender: Optional[int] = Form(None),
+        user_status: Optional[int] = Form(None),
         db: SQLAlchemySession = Depends(get_session),
         user: User = Depends(get_user),
     ):

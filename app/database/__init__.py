@@ -1,4 +1,5 @@
 import sys
+import os
 from typing import Generator
 from urllib.parse import quote_plus
 
@@ -21,17 +22,23 @@ dbname = f"medchain_db{suffix}"
 user = quote_plus(settings.POSTGRES_USER)
 password = quote_plus(settings.POSTGRES_PASSWORD)
 # psycopg (v3) tem melhor suporte a encoding no Windows que psycopg2
-database_url = (
+database_url = os.environ.get("DATABASE_URL") or (
     f"postgresql+psycopg://{user}:{password}@{host}:{settings.POSTGRES_PORT}/{dbname}"
 )
 
+pool_args = {}
+if "sqlite" not in database_url:
+    pool_args = {
+        "pool_pre_ping": True,
+        "pool_use_lifo": True,
+        "pool_size": 30,
+        "max_overflow": 15,
+        "pool_recycle": 1800,
+    }
+
 engine = create_engine(
     database_url,
-    pool_pre_ping=True,
-    pool_use_lifo=True,
-    pool_size=30,
-    max_overflow=15,
-    pool_recycle=1800,
+    **pool_args,
 )
 
 # Cria o SessionLocal (autobegin: cada operação inicia transação se necessário)

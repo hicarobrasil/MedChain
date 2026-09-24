@@ -1,0 +1,1 @@
+from .sync_blockchain import sync_medical_records_to_blockchain

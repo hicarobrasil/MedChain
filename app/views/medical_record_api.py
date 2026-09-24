@@ -58,7 +58,7 @@ async def create_medical_record(
     description: str = Form(...),
     medications: str = Form("[]"),
     file: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db),
+    db: SQLAlchemySession = Depends(get_session),
     _: bool = Depends(user_or_admin),
 ):
     """Cria um novo registro medico com blockchain."""
@@ -116,7 +116,7 @@ async def create_medical_record(
 @router.get("/medical-records/{record_id}", response_model=MedicalRecordsResponse)
 async def get_medical_record(
     record_id: int,
-    db: Session = Depends(get_db),
+    db: SQLAlchemySession = Depends(get_session),
     _: bool = Depends(verify_record_access),
 ):
     """Obtem um registro medico especifico."""
@@ -136,7 +136,7 @@ async def get_medical_record(
 async def list_medical_records(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: SQLAlchemySession = Depends(get_session),
     _: bool = Depends(user_or_admin),
 ):
     """Lista todos os registros medicos."""
@@ -151,7 +151,7 @@ async def list_medical_records(
 )
 async def get_patient_medical_records(
     patient_id: str,
-    db: Session = Depends(get_db),
+    db: SQLAlchemySession = Depends(get_session),
     _: bool = Depends(verify_patient_records_access),
 ):
     """Obtem todos os registros medicos de um paciente."""
@@ -173,7 +173,7 @@ async def get_patient_medical_records(
 )
 async def get_doctor_medical_records(
     doctor_id: str,
-    db: Session = Depends(get_db),
+    db: SQLAlchemySession = Depends(get_session),
     _: bool = Depends(verify_doctor_records_access),
 ):
     """Obtem todos os registros medicos de um medico."""

@@ -6,13 +6,14 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from app.models.doctor import DoctorRecord, SpecialtyEnum, StatusEnum
+from app.models.doctor import DoctorModel, SpecialtyEnum
+from app.models.user import StatusEnum
 
 class DoctorService:
     def __init__(self, db: Session):
         self.db = db
 
-    def create_doctor(self, data: Dict[str, Any]) -> DoctorRecord:
+    def create_doctor(self, data: Dict[str, Any]) -> DoctorModel:
         """
         Cria um novo registro de medico.
         
@@ -20,7 +21,7 @@ class DoctorService:
             data: Dicionario com os dados do medico
             
         Returns:
-            Objeto DoctorRecord criado
+            Objeto DoctorModel criado
         """
         try:
             specialty_int = data.get("specialty")
@@ -31,15 +32,10 @@ class DoctorService:
             if status_int not in StatusEnum._value2member_map_:
                 raise ValueError("Status invalido")
                 
-            doctor = DoctorRecord(
-                name=data.get("name"),
-                crm=data.get("crm"),
+            doctor = DoctorModel(
+                CRM=data.get("crm"),
                 specialty=specialty_int,
-                email=data.get("email"),
-                phone=data.get("phone"),
-                status=status_int,
-                hospital_affiliation=data.get("hospital_affiliation"),
-                office_address=data.get("office_address")
+                user_id=data.get("user_id"),
             )
 
             self.db.add(doctor)
@@ -52,7 +48,7 @@ class DoctorService:
             self.db.rollback()
             raise HTTPException(status_code=400, detail=f"Erro ao criar medico: {str(e)}")
 
-    def get_doctor_by_uid(self, doctor_uid: uuid.UUID) -> DoctorRecord:
+    def get_doctor_by_uid(self, doctor_uid: uuid.UUID) -> DoctorModel:
         """
         Busca um medico pelo UID.
         
@@ -60,17 +56,17 @@ class DoctorService:
             doctor_uid: UUID do medico
             
         Returns:
-            Objeto DoctorRecord encontrado
+            Objeto DoctorModel encontrado
             
         Raises:
             HTTPException: Se o medico nao for encontrado
         """
-        doctor = self.db.query(DoctorRecord).filter(DoctorRecord.uid == doctor_uid).first()
+        doctor = self.db.query(DoctorModel).filter(DoctorModel.public_id == doctor_uid).first()
         if not doctor:
             raise HTTPException(status_code=404, detail="Medico nao encontrado")
         return doctor
 
-    def get_doctor_by_crm(self, crm: str) -> DoctorRecord:
+    def get_doctor_by_crm(self, crm: str) -> DoctorModel:
         """
         Busca um medico pelo CRM.
         
@@ -78,26 +74,26 @@ class DoctorService:
             crm: Numero do CRM
             
         Returns:
-            Objeto DoctorRecord encontrado
+            Objeto DoctorModel encontrado
             
         Raises:
             HTTPException: Se o medico nao for encontrado
         """
-        doctor = self.db.query(DoctorRecord).filter(DoctorRecord.crm == crm).first()
+        doctor = self.db.query(DoctorModel).filter(DoctorModel.CRM == crm).first()
         if not doctor:
             raise HTTPException(status_code=404, detail="Medico nao encontrado")
         return doctor
 
-    def get_all_doctors(self) -> List[DoctorRecord]:
+    def get_all_doctors(self) -> List[DoctorModel]:
         """
         Retorna todos os medicos cadastrados.
         
         Returns:
-            Lista de objetos DoctorRecord
+            Lista de objetos DoctorModel
         """
-        return self.db.query(DoctorRecord).all()
+        return self.db.query(DoctorModel).all()
 
-    def get_doctors_by_specialty(self, specialty: int) -> List[DoctorRecord]:
+    def get_doctors_by_specialty(self, specialty: int) -> List[DoctorModel]:
         """
         Busca medicos por especialidade.
         
@@ -105,11 +101,11 @@ class DoctorService:
             specialty: Codigo da especialidade (SpecialtyEnum)
             
         Returns:
-            Lista de objetos DoctorRecord
+            Lista de objetos DoctorModel
         """
-        return self.db.query(DoctorRecord).filter(DoctorRecord.specialty == specialty).all()
+        return self.db.query(DoctorModel).filter(DoctorModel.specialty == specialty).all()
 
-    def update_doctor(self, doctor_uid: uuid.UUID, update_data: Dict[str, Any]) -> DoctorRecord:
+    def update_doctor(self, doctor_uid: uuid.UUID, update_data: Dict[str, Any]) -> DoctorModel:
         """
         Atualiza os dados de um medico.
         
@@ -118,7 +114,7 @@ class DoctorService:
             update_data: Dicionario com os dados a serem atualizados
             
         Returns:
-            Objeto DoctorRecord atualizado
+            Objeto DoctorModel atualizado
         """
         doctor = self.get_doctor_by_uid(doctor_uid)
 

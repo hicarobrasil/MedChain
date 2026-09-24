@@ -1,10 +1,6 @@
 FROM python:3.11-buster
 
-ADD ./medchain
-
 WORKDIR /medchain
-
-RUN pip install -r requirements.txt
 
 RUN apt-get update && \
     apt-get install -y curl && \
@@ -12,8 +8,13 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
 ENV PATH="/root/.local/share/solana/install/active_release/bin:${PATH}"
-ENV PYTHONPATH="/app:${PYTHONPATH}"
+ENV PYTHONPATH="/medchain:${PYTHONPATH}"
 RUN chmod +x entrypoint.sh
 
-ENTRYPOINT [".entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
